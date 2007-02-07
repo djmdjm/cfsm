@@ -4,7 +4,8 @@ improve graphviz output
 	display preconditions
 	display transition calls
 
-regress tests
+more regress tests
 
 better documentation
 
+state_reset() function
