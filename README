@@ -9,73 +9,9 @@ to occur and "transition functions" that are called upon transitions. Both
 the preconditions and transition functions are per-state, and can be defined
 to fire at state entry or exit
 
-The following command line will generate a C source and header as well
-as a graph in "dot" format:
+A reasonably well documented example state machine that shows off the
+currently supported directives is included as "example.fsm" in this
+directory.  The following command line will compile it to generate a C
+source and header as well as a graph in "dot" format:
 
 ./cfsm.py -C example.c -H example.h -D example.dot example.fsm 
-
-An example state machine that shows off the currently supported directives:
-
-# -------------------------------------------------------------------
-# Comments are delimited with a '#' character and may start anywhere
-# on a line. Blank lines are ignored.
-
-# Define the enumeration type the state machine will use
-state-enum-type mystate
-
-# Define the names of the exported API functions
-current-state-function mystate_current
-initialise-function mystate_init
-advance-function mystate_advance
-enum-to-string-function mystate_tostring
-
-# Define a state
-state INITIAL_1
-	# Mark this as an "initial" state. FSMs compiled by cfsm require
-	# at least one initial state
-	initial-state
-	# Define one or more states that can be advanced to from this state
-	next-state EXCITED_STATE
-
-state INITIAL_2
-	# Make this an initial state too. If there are multiple initial states
-	# defined, cfsm will emit a "initialise-function" that must be called
-	# to explicitly initialise the FSM. If only one initial state is
-	# defined, then cfsm will just use it (no initialisation required)
-	initial-state
-	next-state EXCITED_STATE
-	# Define an exit precondition. This will call a function:
-	#    int is_excited(enum mystate current_state, enum mystate new_state)
-	# and will refuse to advance to another state unless it signals
-	# satisfaction by returning zero
-	exit-precondition check_excitation
-
-state EXCITED_STATE
-	# Define an entry transition function. This will have a signature of:
-	#    void now_excited(enum mystate old_state, enum mystate new_state)
-	# It will be called every time this state is entered
-	onentry-func now_excited
-	# It is possible to have define "loopback" transitions. These will
-	# still need to obey all preconditions and will trigger transition
-	# functions
-	next-state EXCITED_STATE
-	next-state GROUND_STATE
-
-state GROUND_STATE
-	# Define an entry precondition. These have the same signature as the
-	# exit-precondition above
-	entry-precondition ready_to_emit_photon
-	next-state EXCITED_STATE
-	# Define an exit transition function. Same signature as onentry-func
-	onexit-func absorb_a_photon
-
-# Add a banner to our ourput
-source-banner
-/*
- * This banner gets copied to both the source and header files.
- * It is useful for copyright notices, etc. It continues until the 
- * end-source-banner directive appears at the start of a line
- */
-end-source-banner
-# -------------------------------------------------------------------
-
