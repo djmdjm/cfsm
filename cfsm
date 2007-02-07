@@ -304,21 +304,66 @@ class FSM:
 
 #include <sys/types.h>
 
+/*
+ * The valid states of the FSM
+ */
 enum %s {""" % (guard, guard, self.enum_name)
 		i = 0
 		for state in self.state_list:
 			print >> h, "	%s = %u," % (state.name, i)
 			i += 1
-		print >> h, "};\n"
-		print >> h, "int %s(enum %s, char *, size_t);" % \
-		    (self.advance_func, self.enum_name)
-		print >> h, "const char *%s(enum %s);" % \
-		    (self.enum_to_string_func, self.enum_name)
-		if len([s for s in self.state_list if s.initial]) > 1:
-			print >> h, "int %s(enum %s, char *, size_t);" % \
-			    (self.init_func, self.enum_name)
-		print >> h, "int %s(void);" % self.current_state_func
-		print >> h, "";
+
+		need_init = len([s for s in self.state_list if s.initial]) > 1
+		caveat = ""
+		if need_init:
+			caveat = """
+ * The return value from this function is undefined if the FSM has not been
+ * initialised with """ + self.init_func
+
+		print >> h, \
+"""};
+
+/*
+ * Attempt to advance to the state specified by "new_state". Will return
+ * 0 on success, -1 on failure. If "errbuf" is not NULL, upto "errlen"
+ * bytes of error message will be copied into "errbuf" on failure.
+ */
+int %(advance_func)s(enum %(enum_name)s new_state, char *errbuf, size_t errlen);
+
+/*
+ * Convert from the %(enum_name)s enumeration to a string. Will return
+ * NULL if the state is not known.
+ */
+const char *%(enum_to_string_func)s(enum %(enum_name)s);
+
+/*
+ * "Safe" version of %(enum_to_string_func)s. Will return the string
+ * "[INVALID]" if the state is not known, so it can be used directly
+ * in printf() statements, etc.
+ */
+const char *%(enum_to_string_func)s_safe(enum %(enum_name)s);
+
+/*
+ * Returns the current state of the FSM.%(caveat)s
+ */
+enum %(enum_name)s %(current_state_func)s(void);
+""" % {
+		    "caveat" : caveat,
+		    "enum_name" : self.enum_name,
+		    "advance_func" : self.advance_func,
+		    "enum_to_string_func" : self.enum_to_string_func,
+		    "current_state_func" : self.current_state_func
+		}
+		if need_init:
+			print >> h, \
+"""/*
+ * Set the starting state of the FSM to "initial_state". The FSM cannot
+ * be used until this function has returned sucessfully. Will return 0
+ * on success, -1 on failure. If "errbuf" is not NULL, upto "errlen"
+ * bytes of error message will be copied into "errbuf" on failure.
+ */
+int %(init)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen);
+""" % { "init" : self.init_func, "enum_name" : self.enum_name}
 		print >> h, "#endif /* %s */" % guard
 
 	def _output_state_validity_checks(self, h):
@@ -469,22 +514,22 @@ enum %s {""" % (guard, guard, self.enum_name)
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "Illegal state transition attempted: %%s -> %%s",
-		    %(enum_to_string)s(current_state),
-		    %(enum_to_string)s(new_state));
+		    %(enum_to_string)s_safe(current_state),
+		    %(enum_to_string)s_safe(new_state));
 	}
 	return -1;
  entry_precond_fail:
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "State %%s entry precondition not satisfied",
-		    %(enum_to_string)s(new_state));
+		    %(enum_to_string)s_safe(new_state));
 	}
 	return -1;
  exit_precond_fail:
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "State %%s exit precondition not satisfied",
-		    %(enum_to_string)s(current_state));
+		    %(enum_to_string)s_safe(current_state));
 	}
 	return -1;
 }
@@ -510,7 +555,8 @@ int
 		if (errlen > 0 && errbuf != NULL) {
 			snprintf(errbuf, errlen,
 			    "State %%s (%%d) is not a valid start state",
-			    %(enum_to_string)s(initial_state), initial_state);
+			    %(enum_to_string)s_safe(initial_state),
+			    initial_state);
 		}
 		return -1;
 	}
@@ -520,7 +566,7 @@ int
 }
 """ % { "enum_to_string" : self.enum_to_string_func }
 
-	def _output_enum_to_string_func(self, h):
+	def _output_enum_to_string_funcs(self, h):
 		print >> h, \
 """const char *
 %s(enum %s n)
@@ -533,19 +579,28 @@ int
 """	};
 
 	if (!(n >= %(ok1)s && n <= %(ok2)s))
-		return "[INVALID]";
+		return NULL;
 	return state_names[n];
 }
 """ % { "ok1" : self.state_list[0].name, "ok2" : self.state_list[-1].name }
+		print >> h, """
+const char *
+%s_safe(enum %s n)
+{
+	const char *r = %s(n);
+
+	return r == NULL ? "[INVALID]" : r;
+}
+""" % (self.enum_to_string_func, self.enum_name, self.enum_to_string_func)
 
 	def _output_current_state_func(self, h):
 		print >> h, \
-"""int
+"""enum %s
 %s(void)
 {
 	return current_state;
 }
-""" % self.current_state_func
+""" % (self.enum_name, self.current_state_func)
 
 	def output_source(self, h, header_path):
 		if self.source_banner is not None:
@@ -557,6 +612,8 @@ int
 		print >> h, "#include \"%s\"\n" % header_path
 
 		self._output_state_func_prototypes(h)
+
+		self._output_enum_to_string_funcs(h)
 
 		# If there is no unique starting state then emit code to
 		# select one
@@ -573,7 +630,6 @@ int
 
 		print >> h, ""
 		self._output_state_advance_func(h, len(init_states) > 1)
-		self._output_enum_to_string_func(h)
 		self._output_current_state_func(h)
 
 	def output_dot(self, h):

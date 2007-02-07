@@ -30,7 +30,7 @@ state INITIAL_2
 	#    int is_excited(enum mystate current_state, enum mystate new_state)
 	# and will refuse to advance to another state unless it signals
 	# satisfaction by returning zero
-	exit-precondition check_excitation
+	exit-precondition is_excited
 
 state EXCITED_STATE
 	# Define an entry transition function. This will have a signature of:
@@ -51,7 +51,7 @@ state GROUND_STATE
 	# Define an exit transition function. Same signature as onentry-func
 	onexit-func absorb_a_photon
 
-# Add a banner to our ourput
+# Add a banner to our output
 source-banner
 /*
  * This banner gets copied to both the source and header files.
