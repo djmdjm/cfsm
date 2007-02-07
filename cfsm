@@ -1,0 +1,629 @@
+#!/usr/bin/python
+
+# Copyright 2007 Damien Miller <djm@mindrot.org>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+# I assert no rights over the output of the cfsm program (i.e. the
+# generated C source file, header and dot graph). If you find cfsm
+# useful and use it in your project, then a credit notice in the source
+# or documentation would be appreciated, but is not required.
+
+"""
+Finite state machine compiler
+
+This program compiles a high-level textual description of a finite state
+machine into a C source file, header and/or a graphviz dot file. It
+requires all state transitions to be explicitly labelled and will
+disallow transitions that aren't permitted. It also supports "precondition"
+functions that are required to succeed before a state transition is allowed
+to occur and "transition functions" that are called upon transitions. Both
+the preconditions and transition functions are per-state, and can be defined
+to fire at state entry or exit
+
+An example state machine that shows off most of the directives:
+
+# -------------------------------------------------------------------
+# Comments are delimited with a '#' character and may start anywhere
+# on a line. Blank lines are ignored.
+
+# Define the enumeration type the state machine will use
+state-enum-type mystate
+
+# Define the names of the exported API functions
+current-state-function mystate_current
+initialise-function mystate_init
+advance-function mystate_advance
+enum-to-string-function mystate_tostring
+
+# Define a state
+state INITIAL_1
+	# Mark this as an "initial" state. FSMs compiled by cfsm require
+	# at least one initial state
+	initial-state
+	# Define one or more states that can be advanced to from this state
+	next-state EXCITED_STATE
+
+state INITIAL_2
+	# Make this an initial state too. If there are multiple initial states
+	# defined, cfsm will emit a "initialise-function" that must be called
+	# to explicitly initialise the FSM. If only one initial state is
+	# defined, then cfsm will just use it (no initialisation required)
+	initial-state
+	next-state EXCITED_STATE
+	# Define an exit precondition. This will call a function:
+	#    int is_excited(enum mystate current_state, enum mystate new_state)
+	# and will refuse to advance to another state unless it signals
+	# satisfaction by returning zero
+	exit-precondition check_excitation
+
+state EXCITED_STATE
+	# Define an entry transition function. This will have a signature of:
+	#    void now_excited(enum mystate old_state, enum mystate new_state)
+	# It will be called every time this state is entered
+	onentry-func now_excited
+	# It is possible to have define "loopback" transitions. These will
+	# still need to obey all preconditions and will trigger transition
+	# functions
+	next-state EXCITED_STATE
+	next-state GROUND_STATE
+
+state GROUND_STATE
+	# Define an entry precondition. These have the same signature as the
+	# exit-precondition above
+	entry-precondition ready_to_emit_photon
+	next-state EXCITED_STATE
+	# Define an exit transition function. Same signature as onentry-func
+	onexit-func absorb_a_photon
+
+# Add a banner to our ourput
+source-banner
+/*
+ * This banner gets copied to both the source and header files.
+ * It is useful for copyright notices, etc. It continues until the 
+ * end-source-banner directive appears at the start of a line
+ */
+end-source-banner
+# -------------------------------------------------------------------
+"""
+
+import re
+import sys
+import getopt
+
+def usage():
+	print """
+cfsm.py -- Finite state machine compiler
+Usage: cfsm.py [-h] [-C source.c] [-H header.h] [-D dotfile.dot] input.fsm
+
+Command-line flags:
+        -h             Display this help
+        -C path        Output C source to "path"
+        -H path        Output C header to "path"
+        -D path        Output graphviz dot graph to "path"
+"""
+
+def main():
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], 'C:D:H:h')
+	except getopt.GetoptError:
+		print >> sys.stderr, "Error: Invalid commandline arguments"
+		usage()
+		sys.exit(1)
+
+	source_file = None
+	header_file = None
+	dot_file = None
+	for o, a in opts:
+		if o in ('-h', '--help'):
+			usage()
+			sys.exit(0)
+		if o in ('-C', '--source'):
+			source_file = a
+		if o in ('-D', '--dot'):
+			dot_file = a
+		if o in ('-H', '--heder'):
+			header_file = a
+	if len(args) != 1:
+		print >> sys.stderr, "Error: No input file specified"
+		usage()
+		sys.exit(1)
+
+	input_path = args[0]
+
+	if source_file is None and header_file is None and dot_file is None:
+		print >> sys.stderr, "Error: No output file(s) specified"
+		usage()
+		sys.exit(1)
+
+	keywords = {
+		'state'				: [ False, 2 ],
+		'next-state'			: [ True, 2 ],
+		'entry-precondition'		: [ True, 2 ],
+		'onentry-func'			: [ True, 2 ],
+		'exit-precondition'		: [ True, 2 ],
+		'onexit-func'			: [ True, 2 ],
+		'initial-state'			: [ True, 1 ],
+		'state-enum-type'		: [ False, 2 ],
+		'advance-function'		: [ False, 2 ],
+		'initialise-function'		: [ False, 2 ],
+		'initialize-function'		: [ False, 2 ],
+		'current-state-function'	: [ False, 2 ],
+		'enum-to-string-function'	: [ False, 2 ],
+		'source-banner'			: [ False, 1 ],
+	}
+
+	lnum = 0
+	fsm = FSM()
+	state = None
+	banner = None
+	input_file = open(input_path)
+	for line in input_file:
+		lnum += 1
+		comment_ndx = line.find('#')
+		if comment_ndx != -1:
+			line = line[:comment_ndx]
+		line = line.strip()
+		if line == "":
+			continue
+
+		terms = line.split()
+		if not terms[0] in keywords:
+			print >> sys.stderr, "line %d:" % lnum, \
+			    "unsupported directive \"%s\"" % terms[0]
+			sys.exit(1)
+		if len(terms) != keywords[terms[0]][1]:
+			print >> sys.stderr, "line %d:" % lnum, \
+			    "syntax error"
+			sys.exit(1)
+		if keywords[terms[0]][0] and state is None:
+			print >> sys.stderr, "line %d:" % lnum, \
+			    terms[0], "cannot be used outside of", \
+			    "a state definition"
+			sys.exit(1)
+
+		try:
+			if terms[0] == 'state':
+				if state is not None:
+					fsm.add_state(state)
+				state = State(terms[1])
+			elif terms[0] == 'next-state':
+				state.add_next_state(terms[1])
+				# XXX support:
+				# next-state FOO transition_func
+			elif terms[0] == 'entry-precondition':
+				state.add_pre_entry_func(terms[1])
+			elif terms[0] == 'onentry-func':
+				state.add_post_entry_func(terms[1])
+			elif terms[0] == 'exit-precondition':
+				state.add_pre_exit_func(terms[1])
+			elif terms[0] == 'onexit-func':
+				state.add_post_exit_func(terms[1])
+			elif terms[0] == 'initial-state':
+				state.initial = True
+			elif terms[0] == 'state-enum-type':
+				fsm.enum_name = terms[1]
+			elif terms[0] == 'initialise-function' or \
+			     terms[0] == 'initialize-function':
+				fsm.init_func = terms[1]
+			elif terms[0] == 'advance-function':
+				fsm.advance_func = terms[1]
+			elif terms[0] == 'current-state-function':
+				fsm.cuttent_state_func = terms[1]
+			elif terms[0] == 'enum-to-string-function':
+				fsm.enum_to_string_func = terms[1]
+			elif terms[0] == 'source-banner':
+				source_banner = ""
+				for l in input_file:
+					lnum += 1
+					if l.startswith('end-source-banner'):
+						break
+					source_banner += l
+				if not l.startswith('end-source-banner'):
+					raise ValueError, \
+					   "EOF looking for end-source-banner"
+				fsm.source_banner = source_banner
+
+		except ValueError, e:
+				print >> sys.stderr, "line %d:" % lnum, e
+				sys.exit(1)
+
+	if state is not None:
+		fsm.add_state(state)
+
+	try:
+		fsm.finalise()
+	except ValueError, e:
+		print >> sys.stderr, e
+		sys.exit(1)
+
+	if header_file is not None:
+		fsm.output_header(open(header_file, "w"), header_file)
+	if source_file is not None:
+		fsm.output_source(open(source_file, "w"), header_file)
+	if dot_file is not None:
+		fsm.output_dot(open(dot_file, "w"))
+
+class FSM:
+	def __init__(self):
+		self.state_list = []
+		self.states = {}
+		self.enum_name = "state"
+		self.init_func = "state_initialise"
+		self.advance_func = "state_advance"
+		self.enum_to_string_func = "state_ntop"
+		self.current_state_func = "state_current"
+		self.source_banner = None
+
+	def add_state(self, state):
+		if state.name in self.states:
+			raise ValueError, "State %s already added" % state.name
+		self.state_list.append(state)
+		self.states[state.name] = state
+
+	def finalise(self):
+		indegrees = dict([ (s, 0) for s in self.states])
+		for state in self.states:
+			for arc in self.states[state].next_states:
+				if not arc in self.states:
+					raise ValueError, "State " + state + \
+					    " refers to nonexistent " + \
+					    "next-state " + arc
+				indegrees[arc] += 1
+		for state in indegrees:
+			if indegrees[state] == 0 and \
+			   not self.states[state].initial:
+				raise ValueError, "Unreachable state " + state
+			
+	def _output_selfpromotion(self, h):
+		print >> h, \
+"""/*
+ * Automatically generated using the cfsm FSM compiler:
+ * http://www.mindrot.org/projects/cfsm/
+ */
+"""
+
+	def output_header(self, h, filename):
+		guard = filename.upper().replace('/', '__').replace('.', '_')
+		if self.source_banner is not None:
+			print >> h, self.source_banner
+		self._output_selfpromotion(h)
+		print >> h, \
+"""#ifndef %s
+#define %s
+
+#include <sys/types.h>
+
+enum %s {""" % (guard, guard, self.enum_name)
+		i = 0
+		for state in self.state_list:
+			print >> h, "	%s = %u," % (state.name, i)
+			i += 1
+		print >> h, "};\n"
+		print >> h, "int %s(enum %s, char *, size_t);" % \
+		    (self.advance_func, self.enum_name)
+		print >> h, "const char *%s(enum %s);" % \
+		    (self.enum_to_string_func, self.enum_name)
+		if len([s for s in self.state_list if s.initial]) > 1:
+			print >> h, "int %s(enum %s, char *, size_t);" % \
+			    (self.init_func, self.enum_name)
+		print >> h, "int %s(void);" % self.current_state_func
+		print >> h, "";
+		print >> h, "#endif /* %s */" % guard
+
+	def _output_state_validity_checks(self, h):
+		# Output current_state and new_state sanity checks
+		print >> h, "	/* Sanity check states */"
+		for which in "current", "new":
+			print >> h, \
+"""	if (!(%(name)s_state >= %(ok1)s && %(name)s_state <= %(ok2)s)) {
+		if (errlen > 0 && errbuf != NULL) {
+			snprintf(errbuf, errlen, "Invalid %(name)s_state (%%d)",
+			    %(name)s_state);
+		}
+		return -1;
+	}""" % {
+		    "name" : which,
+		    "ok1" : self.state_list[0].name,
+		    "ok2" : self.state_list[-1].name,
+		}
+		print >> h, ""
+
+	def _output_transition_checks(self, h):
+		# XXX this might be better done using an adjacency matrix
+		#     (perhaps packed into a bit vector for space)
+		# Output transition validity checking
+		print >> h, "	/* Transition checks */"
+		print >> h, "	switch (current_state) {"
+		for state in self.state_list:
+			print >> h, "	case %s:" % state.name
+			if len(state.next_states) == 0:
+				print >> h, "		goto bad_transition;"
+				continue
+			print >> h, "		switch (new_state) {"
+			for arc in state.next_states:
+				print >> h, "		case %s:" % arc
+			print >> h, "			break;"
+			print >> h, "		default:"
+			print >> h, "			goto bad_transition;"
+			print >> h, "		}"
+			print >> h, "		break;"
+		print >> h, "	}\n"
+
+	def _output_state_change_calls(self, h, what, which, attr, critical):
+		# Output state change precondition/entry/exit calls
+		# This could be folded into the transition checking switch,
+		# but the code would be IMHO less readable
+		if which == "entry":
+			var = "new_state"
+		elif which == "exit":
+			var = "current_state"
+		else:
+			raise ValueError, "bogus which \"%s\"" % which
+
+		switch_started = False
+		for state in self.state_list:
+			funcs = getattr(state, attr)
+			if len(funcs) == 0:
+				continue
+			if not switch_started:
+				print >> h, "	/* %s %s */" % (which, what)
+				print >> h, "	switch (%s) {" % var
+				switch_started = True
+			print >> h, "	case %s:" % state.name
+			for func in funcs:
+				func_call = func + "(current_state, new_state)"
+				if critical:
+					print >> h, \
+					    "\t\tif (%s != 0)" % func_call
+					print >> h, \
+					    "\t\t\tgoto %s_precond_fail;" % \
+					    which
+				else:
+					print >> h, "\t\t%s;" % func_call
+			print >> h, "		break;"
+		if switch_started:
+			print >> h, "	default:"
+			print >> h, \
+			    "		break; /* Hush compiler warnings */"
+			print >> h, "	}\n"
+
+	def _output_preconditions(self, h):
+		self._output_state_change_calls(h, "preconditions",
+		    "exit", "pre_exit_funcs", True)
+		self._output_state_change_calls(h, "preconditions",
+		    "entry", "pre_entry_funcs", True)
+				
+	def _output_transition_calls(self, h):
+		self._output_state_change_calls(h, "transition functions",
+		    "exit", "post_exit_funcs", False)
+		self._output_state_change_calls(h, "transition functions",
+		    "entry", "post_entry_funcs", False)
+
+	def _output_state_func_prototypes(self, h):
+		actions = {}
+		preconds = {}
+		for state in self.state_list:
+			for func in state.pre_entry_funcs:
+				preconds[func] = True
+			for func in state.pre_exit_funcs:
+				preconds[func] = True
+			for func in state.post_entry_funcs:
+				actions[func] = True
+			for func in state.post_exit_funcs:
+				actions[func] = True
+		if len(actions) > 0:
+			print >> h, "/* Prototypes for transition functions */"
+		for func in actions:
+			print >> h, "void %s(enum %s, enum %s);" % \
+			    (func, self.enum_name, self.enum_name)
+		print >> h, ""
+		if len(preconds) > 0:
+			print >> h, "/* Prototypes for precondition checks */"
+		for func in preconds:
+			print >> h, "int %s(enum %s, enum %s);" % \
+			    (func, self.enum_name, self.enum_name)
+		print >> h, ""
+			
+	def _output_state_advance_func(self, h, need_init_check):
+		print >> h, \
+"""int
+%s(enum %s new_state, char *errbuf, size_t errlen)
+{
+	enum %s old_state;
+""" % (self.advance_func, self.enum_name, self.enum_name)
+
+		if need_init_check:
+			print >> h, \
+"""	if (!initialised) {
+		if (errlen > 0 && errbuf != NULL)
+			snprintf(errbuf, errlen, "FSM not initialised");
+		return -1;
+	}
+"""
+		self._output_state_validity_checks(h)
+		self._output_transition_checks(h)
+		self._output_preconditions(h)
+
+		print >> h, \
+"""	/* Switch state now */
+	old_state = current_state;
+	current_state = new_state;
+"""
+		self._output_transition_calls(h)
+
+		print >> h, \
+"""	return 0;
+
+ bad_transition:
+	if (errlen > 0 && errbuf != NULL) {
+		snprintf(errbuf, errlen,
+		    "Illegal state transition attempted: %%s -> %%s",
+		    %(enum_to_string)s(current_state),
+		    %(enum_to_string)s(new_state));
+	}
+	return -1;
+ entry_precond_fail:
+	if (errlen > 0 && errbuf != NULL) {
+		snprintf(errbuf, errlen,
+		    "State %%s entry precondition not satisfied",
+		    %(enum_to_string)s(new_state));
+	}
+	return -1;
+ exit_precond_fail:
+	if (errlen > 0 && errbuf != NULL) {
+		snprintf(errbuf, errlen,
+		    "State %%s exit precondition not satisfied",
+		    %(enum_to_string)s(current_state));
+	}
+	return -1;
+}
+""" % { "enum_to_string" : self.enum_to_string_func }
+
+	def _output_state_init_func(self, h):
+		print >> h, """
+int
+%(init_func)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen)
+{
+	switch (initial_state) {""" % {
+		    "init_func" : self.init_func,
+		    "enum_name" : self.enum_name
+		}
+
+		for state in self.state_list:
+			if not state.initial:
+				continue;
+			print >> h, "	case %s:" % state.name
+		print >> h, \
+"""		break;
+	default:
+		if (errlen > 0 && errbuf != NULL) {
+			snprintf(errbuf, errlen,
+			    "State %%s (%%d) is not a valid start state",
+			    %(enum_to_string)s(initial_state), initial_state);
+		}
+		return -1;
+	}
+	current_state = initial_state;
+	initialised = 1;
+	return 0;
+}
+""" % { "enum_to_string" : self.enum_to_string_func }
+
+	def _output_enum_to_string_func(self, h):
+		print >> h, \
+"""const char *
+%s(enum %s n)
+{
+	const char *state_names[] = {""" % \
+		    (self.enum_to_string_func, self.enum_name)
+		for state in self.state_list:
+			print >> h, "		\"%s\"," % state.name
+		print >> h, \
+"""	};
+
+	if (!(n >= %(ok1)s && n <= %(ok2)s))
+		return "[INVALID]";
+	return state_names[n];
+}
+""" % { "ok1" : self.state_list[0].name, "ok2" : self.state_list[-1].name }
+
+	def _output_current_state_func(self, h):
+		print >> h, \
+"""int
+%s(void)
+{
+	return current_state;
+}
+""" % self.current_state_func
+
+	def output_source(self, h, header_path):
+		if self.source_banner is not None:
+			print >> h, self.source_banner 
+		self._output_selfpromotion(h)
+
+		print >> h, "#include <sys/types.h>\n"
+		print >> h, "#include <stdio.h>\n"
+		print >> h, "#include \"%s\"\n" % header_path
+
+		self._output_state_func_prototypes(h)
+
+		# If there is no unique starting state then emit code to
+		# select one
+		init_states = [s.name for s in self.state_list if s.initial]
+		if len(init_states) > 1:
+			print >> h, "static enum %s current_state;" % \
+			    self.enum_name
+			print >> h, "static int initialised = 0;"
+			print >> h, ""
+			self._output_state_init_func(h)
+		else:
+			print >> h, "static enum %s current_state = %s;" % \
+			    (self.enum_name, init_states[0])
+
+		print >> h, ""
+		self._output_state_advance_func(h, len(init_states) > 1)
+		self._output_enum_to_string_func(h)
+		self._output_current_state_func(h)
+
+	def output_dot(self, h):
+		# XXX pretty basic. Doesn't show preconditions, etc.
+		print >> h, "digraph FSM {"
+		print >> h, "	rankdir = LR;"
+		print >> h, "	node [shape = doublecircle];",
+		for state in self.state_list:
+			if not state.initial:
+				continue;
+			print >> h, state.name,
+		print >> h, "\n	node [shape = circle];",
+		for state in self.state_list:
+			if state.initial:
+				continue;
+			print >> h, state.name,
+		print >> h, ""
+		for state in self.state_list:
+			for arc in state.next_states:
+				print >> h, "	%s -> %s;" % (state.name, arc)
+		print >> h, "}"
+
+class State:
+	def __init__(self, name):
+		self._name_check(name)
+		self.name = name
+		self.next_states = []
+		self.pre_entry_funcs = []
+		self.post_entry_funcs = []
+		self.pre_exit_funcs = []
+		self.post_exit_funcs = []
+		self.initial = False
+	def _name_check(self, name):
+		if re.match('^[A-Za-z_][A-Za-z0-9_]*$', name) is None:
+			raise ValueError, "Invalid name \"%s\"" % name
+	def add_next_state(self, name):
+		self._name_check(name)
+		self.next_states.append(name)
+	def add_pre_entry_func(self, name):
+		self._name_check(name)
+		self.pre_entry_funcs.append(name)
+	def add_post_entry_func(self, name):
+		self._name_check(name)
+		self.post_entry_funcs.append(name)
+	def add_pre_exit_func(self, name):
+		self._name_check(name)
+		self.pre_exit_funcs.append(name)
+	def add_post_exit_func(self, name):
+		self._name_check(name)
+		self.post_exit_funcs.append(name)
+
+if __name__ == '__main__': main()
+
