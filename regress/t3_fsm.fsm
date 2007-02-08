@@ -1,0 +1,36 @@
+# This file is in the public domain
+# Damien Miller 2007-02-08
+
+state T1a
+	initial-state
+	next-state T2
+	entry-precondition t1a_entry_pre
+	exit-precondition t1a_exit_pre
+	onexit-func t1a_exit
+	onentry-func t1a_enter
+state T1b
+	initial-state
+	next-state T2
+	entry-precondition t1b_entry_pre
+	exit-precondition t1b_exit_pre
+	onexit-func t1b_exit
+	onentry-func t1b_enter
+state T2
+	next-state T3
+	entry-precondition t2_entry_pre
+	exit-precondition t2_exit_pre
+	onexit-func t2_exit
+	onentry-func t2_enter
+state T3
+	next-state T3
+	next-state T2
+	next-state T4
+	entry-precondition t3_entry_pre
+	exit-precondition t3_exit_pre
+	onexit-func t3_exit
+	onentry-func t3_enter
+state T4
+	entry-precondition t4_entry_pre
+	exit-precondition t4_exit_pre
+	onexit-func t4_exit
+	onentry-func t4_enter

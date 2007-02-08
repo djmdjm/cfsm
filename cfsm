@@ -358,9 +358,9 @@ class FSM:
 		    "exit", "pre_exit_funcs", True)
 		entry_preconds = self._build_state_calls("preconditions",
 		    "entry", "pre_entry_funcs", True)
-		trans_funcs = self._build_state_calls("transition functions",
+		exit_funcs = self._build_state_calls("transition functions",
 		    "exit", "post_exit_funcs", False)
-		trans_funcs += self._build_state_calls("transition functions",
+		entry_funcs = self._build_state_calls("transition functions",
 		    "entry", "post_entry_funcs", False)
 
 		error_handlers = ""
@@ -412,7 +412,8 @@ class FSM:
 		    "transition_check" : transition_check,
 		    "entry_preconds" : entry_preconds,
 		    "exit_preconds" : exit_preconds,
-		    "trans_funcs" : trans_funcs,
+		    "exit_funcs" : exit_funcs,
+		    "entry_funcs" : entry_funcs,
 		    "error_handlers" : error_handlers,
 		}
 
@@ -751,11 +752,11 @@ int
 	/* Transition checks */
 	switch (fsm->current_state) {
 %(transition_check)s	}
-%(entry_preconds)s%(exit_preconds)s
+%(exit_preconds)s%(entry_preconds)s%(exit_funcs)s
 	/* Switch state now */
 	old_state = fsm->current_state;
 	fsm->current_state = new_state;
-%(trans_funcs)s
+%(entry_funcs)s
 	return 0;
 
  bad_transition:

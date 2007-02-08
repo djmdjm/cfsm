@@ -3,6 +3,7 @@
    rather than having only one per generated source file
  - (djm) Add a regress test for the multiple initial-state case
  - (djm) (Mostly) templatise the emitted C code
+ - (djm) Add a more extensive regression test and fix the bugs it uncovered
 
 20070207
  - (djm) Initial import of cfsm

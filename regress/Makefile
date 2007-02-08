@@ -1,5 +1,5 @@
 
-TARGETS=t1 t2
+TARGETS=t1 t2 t3
 
 all: $(TARGETS)
 	@echo -n "Running tests: "
@@ -21,6 +21,12 @@ t2_fsm.c: t2_fsm.fsm
 
 t2: t2_fsm.c t2_fsm.o t2.o
 	$(CC) -o $@ t2.o t2_fsm.o
+
+t3_fsm.c: t3_fsm.fsm
+	../cfsm -C t3_fsm.c -H t3_fsm.h t3_fsm.fsm
+
+t3: t3_fsm.c t3_fsm.o t3.o
+	$(CC) -o $@ t3.o t3_fsm.o
 
 clean:
 	rm -f *.o *_fsm.[ch] $(TARGETS) *.core core
