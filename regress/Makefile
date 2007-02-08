@@ -3,11 +3,11 @@ TARGETS=t1 t2
 
 all: $(TARGETS)
 	@echo -n "Running tests: "
-	@(set -e ; for x in $(TARGETS) ; do \
+	@set -e ; for x in $(TARGETS) ; do \
 		test "x$(VERBOSE)" = "x" || echo -n $${x} ; \
 		./$$x && echo -n . || echo -n '!' ; \
 		test "x$(VERBOSE)" = "x" || echo -n ' ' ; \
-	done)
+	done
 	@echo ""
 
 t1_fsm.c: t1_fsm.fsm

@@ -10,8 +10,12 @@ better documentation
 	BNF for parser
 
 state_reset() function
+	(probably don't need this)
 
 templatise the code sections in cfsm
+	done as much as I can without a template language (and I don't want
+	external dependancies)
 
 generation of C source without the header is broken
 	options for "header filename" and "include guard"?
+	(cruddy workaround in place: must generate both at once)

@@ -215,111 +215,36 @@ class FSM:
 			   not self.states[state].initial:
 				raise ValueError, "Unreachable state " + state
 			
-	def _output_selfpromotion(self, h):
-		print >> h, \
-"""/*
- * Automatically generated using the cfsm FSM compiler:
- * http://www.mindrot.org/projects/cfsm/
- */
-"""
-
 	def output_header(self, h, filename):
 		guard = filename.upper().replace('/', '__').replace('.', '_')
+		banner = ""
 		if self.source_banner is not None:
-			print >> h, self.source_banner
-		self._output_selfpromotion(h)
-		print >> h, \
-"""#ifndef %s
-#define %s
+			banner = banner + "\n"
 
-#include <sys/types.h>
-
-/*
- * The valid states of the FSM
- */
-enum %s {""" % (guard, guard, self.enum_name)
+		enum_contents = ""
 		i = 0
 		for state in self.state_list:
-			print >> h, "	%s = %u," % (state.name, i)
+			enum_contents += "	%s = %u,\n" % (state.name, i)
 			i += 1
-
 		init_states = [s.name for s in self.state_list if s.initial]
-		need_init = len(init_states) > 1
-
-		print >> h, \
-"""};
-
-/*
- * The FSM object itself. This is intentionally opaque - all access must be
- * through this API
- */
-struct %s;""" % (self.struct_name)
-
-		if need_init:
-			print >> h, \
-"""
-/*
- * Allocate a new FSM and set its starting state to "initial_state".
- * Will return a pointer to the opaque FSM structure on success or 
- * NULL on failure. If "errbuf" is not NULL, upto "errlen" bytes of
- * error message will be copied into "errbuf" on failure.
- */
-struct %(struct)s *%(init_func)s(enum %(enum_name)s initial_state,
-    char *errbuf, size_t errlen);
-""" % {
-			    "struct" : self.struct_name,
-			    "init_func" : self.init_func,
-			    "enum_name" : self.enum_name
-			}
+		if len(init_states) > 1:
+			init_func_proto_comments = _INIT_FUNC_MULTI
 		else:
-			print >> h, \
-"""
-/*
- * Allocate a new FSM and set its starting state to %(init_state)s
- * Will return a pointer to the opaque FSM structure on success or 
- * NULL on failure. If "errbuf" is not NULL, upto "errlen" bytes of
- * error message will be copied into "errbuf" on failure.
- */
-struct %(struct)s *%(init)s(char *errbuf, size_t errlen);
-""" % {
-			    "struct" : self.struct_name,
-			    "init" : self.init_func,
-			    "init_state" : init_states[0]
+			init_func_proto_comments = _INIT_FUNC_SINGLE
+
+ 		init_func_proto_comments %= {
+			    "struct_name" : self.struct_name,
+			    "init_func" : self.init_func,
+			    "enum_name" : self.enum_name,
+			    "init_state" : init_states[0],
 			}
-
-
-		print >> h, \
-"""/*
- * Free a FSM created with %(init_func)s()
- */
-void %(free_func)s(struct %(struct_name)s *fsm);
-
-/*
- * Attempt to advance to the state specified by "new_state". Will return
- * 0 on success, -1 on failure. If "errbuf" is not NULL, upto "errlen"
- * bytes of error message will be copied into "errbuf" on failure.
- */
-int %(advance_func)s(struct %(struct_name)s *fsm, enum %(enum_name)s new_state,
-    char *errbuf, size_t errlen);
-
-/*
- * Convert from the %(enum_name)s enumeration to a string. Will return
- * NULL if the state is not known.
- */
-const char *%(enum_to_string_func)s(enum %(enum_name)s);
-
-/*
- * "Safe" version of %(enum_to_string_func)s. Will return the string
- * "[INVALID]" if the state is not known, so it can be used directly
- * in printf() statements, etc.
- */
-const char *%(enum_to_string_func)s_safe(enum %(enum_name)s);
-
-/*
- * Returns the current state of the FSM.
- */
-enum %(enum_name)s %(current_state_func)s(struct %(struct_name)s *fsm);
-""" % {
+		
+		print >> h, _C_HEADER % {
+		    "init_func_proto_comments" : init_func_proto_comments,
+		    "enum_contents" : enum_contents,
+		    "self_promotion" : _SELF_PROMOTION,
+		    "banner" : banner,
+		    "guard" : guard,
 		    "struct_name" : self.struct_name,
 		    "enum_name" : self.enum_name,
 		    "init_func" : self.init_func,
@@ -328,108 +253,8 @@ enum %(enum_name)s %(current_state_func)s(struct %(struct_name)s *fsm);
 		    "enum_to_string_func" : self.enum_to_string_func,
 		    "current_state_func" : self.current_state_func
 		}
-		print >> h, "#endif /* %s */" % guard
 
-	def _output_state_validity_checks(self, h):
-		# Output current_state and new_state sanity checks
-		print >> h, \
-"""	/* Sanity check states */
-	if (!(fsm->current_state >= %(ok1)s &&
-	    fsm->current_state <= %(ok2)s)) {
-		if (errlen > 0 && errbuf != NULL) {
-			snprintf(errbuf, errlen, "Invalid current_state (%%d)",
-			    fsm->current_state);
-		}
-		return -1;
-	}
-	if (!(new_state >= %(ok1)s &&
-	    new_state <= %(ok2)s)) {
-		if (errlen > 0 && errbuf != NULL) {
-			snprintf(errbuf, errlen, "Invalid new_state (%%d)",
-			    fsm->current_state);
-		}
-		return -1;
-	}""" % {
-		    "ok1" : self.state_list[0].name,
-		    "ok2" : self.state_list[-1].name,
-		}
-
-	def _output_transition_checks(self, h):
-		# XXX this might be better done using an adjacency matrix
-		#     (perhaps packed into a bit vector for space)
-		# Output transition validity checking
-		print >> h, """
-	/* Transition checks */
-	switch (fsm->current_state) {"""
-		for state in self.state_list:
-			print >> h, "	case %s:" % state.name
-			if len(state.next_states) == 0:
-				print >> h, "		goto bad_transition;"
-				continue
-			print >> h, "		switch (new_state) {"
-			for arc in state.next_states:
-				print >> h, "		case %s:" % arc
-			print >> h, "			break;"
-			print >> h, "		default:"
-			print >> h, "			goto bad_transition;"
-			print >> h, "		}"
-			print >> h, "		break;"
-		print >> h, "	}\n"
-
-	def _output_state_change_calls(self, h, what, which, attr, critical):
-		# Output state change precondition/entry/exit calls
-		# This could be folded into the transition checking switch,
-		# but the code would be IMHO less readable
-		if which == "entry":
-			var = "new_state"
-		elif which == "exit":
-			var = "fsm->current_state"
-		else:
-			raise ValueError, "bogus which \"%s\"" % which
-
-		switch_started = False
-		for state in self.state_list:
-			funcs = getattr(state, attr)
-			if len(funcs) == 0:
-				continue
-			if not switch_started:
-				print >> h, "	/* %s %s */" % (which, what)
-				print >> h, "	switch (%s) {" % var
-				switch_started = True
-			print >> h, "	case %s:" % state.name
-			for func in funcs:
-				func_call = func + \
-				    "(fsm->current_state, new_state)"
-				if critical:
-					print >> h, \
-					    "\t\tif (%s != 0)" % func_call
-					print >> h, \
-					    "\t\t\tgoto %s_precond_fail;" % \
-					    which
-				else:
-					print >> h, "\t\t%s;" % func_call
-			print >> h, "		break;"
-		if switch_started:
-			print >> h, "	default:"
-			print >> h, \
-			    "		break; /* Hush compiler warnings */"
-			print >> h, "	}\n"
-		return switch_started
-
-	def _output_preconditions(self, h):
-		i = self._output_state_change_calls(h, "preconditions",
-		    "exit", "pre_exit_funcs", True)
-		o = self._output_state_change_calls(h, "preconditions",
-		    "entry", "pre_entry_funcs", True)
-		return i, o
-				
-	def _output_transition_calls(self, h):
-		self._output_state_change_calls(h, "transition functions",
-		    "exit", "post_exit_funcs", False)
-		self._output_state_change_calls(h, "transition functions",
-		    "entry", "post_entry_funcs", False)
-
-	def _output_state_func_prototypes(self, h):
+	def _build_state_func_prototypes(self):
 		actions = {}
 		preconds = {}
 		for state in self.state_list:
@@ -441,217 +266,159 @@ enum %(enum_name)s %(current_state_func)s(struct %(struct_name)s *fsm);
 				actions[func] = True
 			for func in state.post_exit_funcs:
 				actions[func] = True
+		ret = ""
 		if len(actions) > 0:
-			print >> h, "/* Prototypes for transition functions */"
+			ret += _TRANS_FUNC_COMMENT
 		for func in actions:
-			print >> h, "void %s(enum %s, enum %s);" % \
-			    (func, self.enum_name, self.enum_name)
-		print >> h, ""
-		if len(preconds) > 0:
-			print >> h, "/* Prototypes for precondition checks */"
-		for func in preconds:
-			print >> h, "int %s(enum %s, enum %s);" % \
-			    (func, self.enum_name, self.enum_name)
-		print >> h, ""
-			
-	def _output_private_struct_decl(self, h):
-		print >> h, \
-"""
-/* Private view of opaque FSM structure */
-struct %(struct_name)s {
-	enum %(enum_name)s current_state;
-};
-""" % { "enum_name" : self.enum_name, "struct_name" : self.struct_name }
-
-	def _output_state_advance_func(self, h):
-		print >> h, \
-"""int
-%(advance_func)s(struct %(struct_name)s *fsm, enum %(enum_name)s new_state,
-    char *errbuf, size_t errlen)
-{
-	enum %(enum_name)s old_state;
-""" % {
-		    "advance_func": self.advance_func,
-		    "enum_name" : self.enum_name,
-		    "struct_name" : self.struct_name
-		}
-
-		self._output_state_validity_checks(h)
-		self._output_transition_checks(h)
-		precond_entry, precond_exit = self._output_preconditions(h)
-
-		print >> h, \
-"""	/* Switch state now */
-	old_state = fsm->current_state;
-	fsm->current_state = new_state;
-"""
-		self._output_transition_calls(h)
-
-		print >> h, \
-"""	return 0;
-
- bad_transition:
-	if (errlen > 0 && errbuf != NULL) {
-		snprintf(errbuf, errlen,
-		    "Illegal state transition attempted: %%s -> %%s",
-		    %(enum_to_string)s_safe(fsm->current_state),
-		    %(enum_to_string)s_safe(new_state));
-	}
-	return -1;""" % { "enum_to_string" : self.enum_to_string_func }
-
-		if precond_entry:
-			print >> h, \
-""" entry_precond_fail:
-	if (errlen > 0 && errbuf != NULL) {
-		snprintf(errbuf, errlen,
-		    "State %%s entry precondition not satisfied",
-		    %(enum_to_string)s_safe(new_state));
-	}
-	return -1;""" % { "enum_to_string" : self.enum_to_string_func }
-
-		if precond_exit:
-			print >> h, \
-""" exit_precond_fail:
-	if (errlen > 0 && errbuf != NULL) {
-		snprintf(errbuf, errlen,
-		    "State %%s exit precondition not satisfied",
-		    %(enum_to_string)s_safe(fsm->current_state));
-	}
-	return -1;""" % { "enum_to_string" : self.enum_to_string_func }
-
-		print >> h, "}\n"
-
-	def _output_state_init_func(self, h):
-		init_states = [s.name for s in self.state_list if s.initial]
-		need_init = len(init_states) > 1
-		
-		if need_init:
-			print >> h, \
-"""struct %(struct_name)s *
-%(init_func)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen)
-{
-	struct %(struct_name)s *ret = NULL;
-
-	switch (initial_state) {""" % {
-			    "init_func" : self.init_func,
-			    "enum_name" : self.enum_name,
-			    "struct_name" : self.struct_name
+			ret += _TRANS_FUNC_PROTO % {
+			    "func" : func,
+			    "enum_name" : self.enum_name
 			}
 
-			for state in init_states:
-				print >> h, "	case %s:" % state
-			print >> h, \
-"""		break;
-	default:
-		if (errlen > 0 && errbuf != NULL) {
-			snprintf(errbuf, errlen,
-			    "State %%s (%%d) is not a valid start state",
-			    %(enum_to_string)s_safe(initial_state),
-			    initial_state);
-		}
-		return NULL;
-	}
-	if ((ret = calloc(1, sizeof(*ret))) == NULL) {
-		if (errlen > 0 && errbuf != NULL)
-			snprintf(errbuf, errlen, "Memory allocation failed");
-		return NULL;
-	}
-	ret->current_state = initial_state;
-	return ret;
-}
-""" % { "enum_to_string" : self.enum_to_string_func }
-		else:
-			print >> h, \
-"""struct %(struct_name)s *
-%(init_func)s(char *errbuf, size_t errlen)
-{
-	struct %(struct_name)s *ret = NULL;
+		if len(preconds) > 0:
+			ret += _PRECOND_FUNC_COMMENT
+		for func in preconds:
+			ret += _PRECOND_FUNC_PROTO % {
+			    "func" : func,
+			    "enum_name" : self.enum_name
+			}
+		return ret
 
-	if ((ret = calloc(1, sizeof(*ret))) == NULL) {
-		if (errlen > 0 && errbuf != NULL)
-			snprintf(errbuf, errlen, "Memory allocation failed");
-		return NULL;
-	}
-	ret->current_state = %(initial_state)s;
-	return ret;
-}""" % {
+	def _build_transition_checks(self):
+		# XXX this might be better done using an adjacency matrix
+		#     (perhaps packed into a bit vector for space)
+		# Output transition validity checking
+		ret = ""
+		for state in self.state_list:
+			ret += "	case %s:\n" % state.name
+			if len(state.next_states) == 0:
+				ret += "		goto bad_transition;\n"
+				continue
+			ret += "		switch (new_state) {\n"
+			for arc in state.next_states:
+				ret += "		case %s:\n" % arc
+			ret += \
+"""			break;
+		default:
+			goto bad_transition;
+		}
+		break;
+"""
+		return ret
+
+	def _build_state_calls(self, what, which, attr, critical):
+		# Output state change precondition/entry/exit calls
+		# This could be folded into the transition checking switch,
+		# but the code would be IMHO less readable
+		if which == "entry":
+			var = "new_state"
+		elif which == "exit":
+			var = "fsm->current_state"
+		else:
+			raise ValueError, "bogus which \"%s\"" % which
+
+		switch_started = False
+		ret = ""
+		for state in self.state_list:
+			funcs = getattr(state, attr)
+			if len(funcs) == 0:
+				continue
+			if not switch_started:
+				ret += _STATE_CALL_SWITCH_START % {
+				    "which" : which,
+				    "what" : what,
+				    "var" : var,
+				}
+				switch_started = True
+			ret += _STATE_CALL_SWITCH_CASE % { 
+			    "state" : state.name
+			}
+			for func in funcs:
+				if critical:
+					frag = _PRECONDITION_FUNC_CALL
+				else:
+					frag = _TRANSITION_FUNC_CALL
+				ret += frag % {
+				    "which" : which,
+				    "func" : func
+				}
+			ret += "		break;\n"
+		if switch_started:
+			ret += _STATE_CALL_SWITCH_FINISH
+		return ret
+
+	def output_source(self, h, header_path):
+		banner = ""
+		if self.source_banner is not None:
+			banner = self.source_banner + "\n"
+
+		state_func_prototypes = self._build_state_func_prototypes()
+		transition_check = self._build_transition_checks()
+		exit_preconds = self._build_state_calls("preconditions",
+		    "exit", "pre_exit_funcs", True)
+		entry_preconds = self._build_state_calls("preconditions",
+		    "entry", "pre_entry_funcs", True)
+		trans_funcs = self._build_state_calls("transition functions",
+		    "exit", "post_exit_funcs", False)
+		trans_funcs += self._build_state_calls("transition functions",
+		    "entry", "post_entry_funcs", False)
+
+		error_handlers = ""
+		if entry_preconds != "":
+			error_handlers += _ENTRY_PRECOND_FAIL
+		if exit_preconds != "":
+			error_handlers += _EXIT_PRECOND_FAIL
+		error_handlers %= {
+		    "enum_to_string_func" : self.enum_to_string_func
+		}
+
+		enum_contents = ""
+		for state in self.state_list:
+			enum_contents += "\t\t\"%s\",\n" % state.name
+
+		init_states = [s.name for s in self.state_list if s.initial]
+		if len(init_states) > 1:
+			init_func_def = _STATE_INIT_FUNC_MULTI
+		else:
+			init_func_def = _STATE_INIT_FUNC_SINGLE
+		init_state_cases = \
+		    "\n".join(["\tcase %s:" % case for case in init_states])
+
+		init_func_def %= {
 			    "init_func" : self.init_func,
 			    "enum_name" : self.enum_name,
 			    "struct_name" : self.struct_name,
-			    "initial_state" : init_states[0]
-			}
-
-	def _output_state_free_func(self, h):
-		print >> h, \
-"""void
-%(free_func)s(struct %(struct_name)s *fsm)
-{
-	memset(fsm, '\\0', sizeof(fsm));
-	free(fsm);
-}
-""" % { "free_func" : self.free_func, "struct_name" : self.struct_name }
-
-	def _output_enum_to_string_funcs(self, h):
-		print >> h, \
-"""const char *
-%s(enum %s n)
-{
-	const char *state_names[] = {""" % \
-		    (self.enum_to_string_func, self.enum_name)
-		for state in self.state_list:
-			print >> h, "		\"%s\"," % state.name
-		print >> h, \
-"""	};
-
-	if (!(n >= %(ok1)s && n <= %(ok2)s))
-		return NULL;
-	return state_names[n];
-}
-""" % { "ok1" : self.state_list[0].name, "ok2" : self.state_list[-1].name }
-		print >> h, """
-const char *
-%s_safe(enum %s n)
-{
-	const char *r = %s(n);
-
-	return r == NULL ? "[INVALID]" : r;
-}
-""" % (self.enum_to_string_func, self.enum_name, self.enum_to_string_func)
-
-	def _output_current_state_func(self, h):
-		print >> h, \
-"""enum %(enum_name)s
-%(current_state_func)s(struct %(struct_name)s *fsm)
-{
-	return fsm->current_state;
-}
-""" % {
-		    "enum_name" : self.enum_name,
-		    "struct_name" : self.struct_name,
-		    "current_state_func" : self.current_state_func
+			    "initial_state" : init_states[0],
+			    "init_state_cases" : init_state_cases,
+			    "enum_to_string_func" : self.enum_to_string_func,
 		}
 
-	def output_source(self, h, header_path):
-		if self.source_banner is not None:
-			print >> h, self.source_banner 
-		self._output_selfpromotion(h)
-
-		print >> h, "#include <sys/types.h>\n"
-		print >> h, "#include <stdlib.h>"
-		print >> h, "#include <string.h>"
-		print >> h, "#include <stdio.h>\n"
-		print >> h, "#include \"%s\"" % header_path
-
-		self._output_private_struct_decl(h)
-		self._output_state_func_prototypes(h)
-		self._output_enum_to_string_funcs(h)
-		self._output_state_init_func(h)
-		self._output_state_free_func(h)
-		self._output_state_advance_func(h)
-		self._output_current_state_func(h)
+		print >> h, _C_SOURCE % {
+		    "header_path" : header_path,
+		    "self_promotion" : _SELF_PROMOTION,
+		    "banner" : banner,
+		    "struct_name" : self.struct_name,
+		    "enum_name" : self.enum_name,
+		    "init_func" : self.init_func,
+		    "free_func" : self.free_func,
+		    "advance_func" : self.advance_func,
+		    "enum_to_string_func" : self.enum_to_string_func,
+		    "current_state_func" : self.current_state_func,
+		    "state_func_prototypes" : state_func_prototypes,
+		    "min_valid" : self.state_list[0].name,
+		    "max_valid" : self.state_list[-1].name,
+		    "enum_contents" : enum_contents,
+		    "init_func_def" : init_func_def,
+		    "transition_check" : transition_check,
+		    "entry_preconds" : entry_preconds,
+		    "exit_preconds" : exit_preconds,
+		    "trans_funcs" : trans_funcs,
+		    "error_handlers" : error_handlers,
+		}
 
 	def output_dot(self, h):
 		# XXX pretty basic. Doesn't show preconditions, etc.
+		# XXX should be a template
 		print >> h, "digraph FSM {"
 		print >> h, "	rankdir = LR;"
 		print >> h, "	node [shape = doublecircle];",
@@ -698,6 +465,311 @@ class State:
 	def add_post_exit_func(self, name):
 		self._name_check(name)
 		self.post_exit_funcs.append(name)
+
+# -------------------------------------------------------------------------
+# The following section contains the template strings and fragments that
+# are emitted into the generated C source and header files
+# -------------------------------------------------------------------------
+
+_SELF_PROMOTION = """/*
+ * Automatically generated using the cfsm FSM compiler:
+ * http://www.mindrot.org/projects/cfsm/
+ */"""
+
+# -------------------------------------------------------------------------
+
+_INIT_FUNC_MULTI = """/*
+ * Allocate a new FSM and set its starting state to "initial_state".
+ * Will return a pointer to the opaque FSM structure on success or 
+ * NULL on failure. If "errbuf" is not NULL, upto "errlen" bytes of
+ * error message will be copied into "errbuf" on failure.
+ */
+struct %(struct_name)s *%(init_func)s(enum %(enum_name)s initial_state,
+    char *errbuf, size_t errlen);"""
+
+# -------------------------------------------------------------------------
+
+_INIT_FUNC_SINGLE = """/*
+ * Allocate a new FSM and set its starting state to %(init_state)s
+ * Will return a pointer to the opaque FSM structure on success or 
+ * NULL on failure. If "errbuf" is not NULL, upto "errlen" bytes of
+ * error message will be copied into "errbuf" on failure.
+ */
+struct %(struct_name)s *%(init_func)s(char *errbuf, size_t errlen);"""
+
+# -------------------------------------------------------------------------
+
+_C_HEADER="""%(banner)s%(self_promotion)s
+
+#ifndef %(guard)s
+#define %(guard)s
+
+#include <sys/types.h>
+
+/*
+ * The valid states of the FSM
+ */
+enum %(enum_name)s {
+%(enum_contents)s};
+
+/*
+ * The FSM object itself. This is intentionally opaque - all access must be
+ * through this API
+ */
+struct %(struct_name)s;
+
+%(init_func_proto_comments)s
+
+/*
+ * Free a FSM created with %(init_func)s()
+ */
+void %(free_func)s(struct %(struct_name)s *fsm);
+
+/*
+ * Attempt to advance to the state specified by "new_state". Will return
+ * 0 on success, -1 on failure. If "errbuf" is not NULL, upto "errlen"
+ * bytes of error message will be copied into "errbuf" on failure.
+ */
+int %(advance_func)s(struct %(struct_name)s *fsm, enum %(enum_name)s new_state,
+    char *errbuf, size_t errlen);
+
+/*
+ * Convert from the %(enum_name)s enumeration to a string. Will return
+ * NULL if the state is not known.
+ */
+const char *%(enum_to_string_func)s(enum %(enum_name)s);
+
+/*
+ * "Safe" version of %(enum_to_string_func)s. Will return the string
+ * "[INVALID]" if the state is not known, so it can be used directly
+ * in printf() statements, etc.
+ */
+const char *%(enum_to_string_func)s_safe(enum %(enum_name)s);
+
+/*
+ * Returns the current state of the FSM.
+ */
+enum %(enum_name)s %(current_state_func)s(struct %(struct_name)s *fsm);
+
+#endif /* %(guard)s */
+"""
+
+# -------------------------------------------------------------------------
+
+_TRANS_FUNC_COMMENT = \
+"""
+/* Prototypes for transition functions */
+"""
+_PRECOND_FUNC_COMMENT = \
+"""
+/* Prototypes for precondition checks */
+"""
+
+_TRANS_FUNC_PROTO = \
+"""void %(func)s(enum %(enum_name)s, enum %(enum_name)s);
+"""
+_PRECOND_FUNC_PROTO = \
+"""int %(func)s(enum %(enum_name)s, enum %(enum_name)s);
+"""
+
+# -------------------------------------------------------------------------
+
+_STATE_INIT_FUNC_MULTI = \
+"""struct %(struct_name)s *
+%(init_func)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen)
+{
+	struct %(struct_name)s *ret = NULL;
+
+	switch (initial_state) {
+%(init_state_cases)s
+		break;
+	default:
+		if (errlen > 0 && errbuf != NULL) {
+			snprintf(errbuf, errlen,
+			    "State %%s (%%d) is not a valid start state",
+			    %(enum_to_string_func)s_safe(initial_state),
+			    initial_state);
+		}
+		return NULL;
+	}
+	if ((ret = calloc(1, sizeof(*ret))) == NULL) {
+		if (errlen > 0 && errbuf != NULL)
+			snprintf(errbuf, errlen, "Memory allocation failed");
+		return NULL;
+	}
+	ret->current_state = initial_state;
+	return ret;
+}"""
+
+# -------------------------------------------------------------------------
+
+_STATE_INIT_FUNC_SINGLE = \
+"""struct %(struct_name)s *
+%(init_func)s(char *errbuf, size_t errlen)
+{
+	struct %(struct_name)s *ret = NULL;
+
+	if ((ret = calloc(1, sizeof(*ret))) == NULL) {
+		if (errlen > 0 && errbuf != NULL)
+			snprintf(errbuf, errlen, "Memory allocation failed");
+		return NULL;
+	}
+	ret->current_state = %(initial_state)s;
+	return ret;
+}"""
+
+# -------------------------------------------------------------------------
+
+_STATE_CALL_SWITCH_START = \
+"""
+	/* %(which)s %(what)s */
+	switch (%(var)s) {
+"""
+
+_STATE_CALL_SWITCH_CASE = \
+"""	case %(state)s:
+"""
+
+_STATE_CALL_SWITCH_FINISH = \
+"""	default:
+		break; /* Hush compiler warnings */
+	}
+"""
+# -------------------------------------------------------------------------
+
+_PRECONDITION_FUNC_CALL = \
+"""		if (%(func)s(fsm->current_state, new_state) != 0)
+			goto %(which)s_precond_fail;
+"""
+_TRANSITION_FUNC_CALL = \
+"""		%(func)s(fsm->current_state, new_state);
+"""
+
+# -------------------------------------------------------------------------
+
+_ENTRY_PRECOND_FAIL = \
+""" entry_precond_fail:
+	if (errlen > 0 && errbuf != NULL) {
+		snprintf(errbuf, errlen,
+		    "State %%s entry precondition not satisfied",
+		    %(enum_to_string_func)s_safe(new_state));
+	}
+	return -1;
+"""
+
+_EXIT_PRECOND_FAIL = \
+""" exit_precond_fail:
+	if (errlen > 0 && errbuf != NULL) {
+		snprintf(errbuf, errlen,
+		    "State %%s exit precondition not satisfied",
+		    %(enum_to_string_func)s_safe(fsm->current_state));
+	}
+	return -1;
+"""
+
+# -------------------------------------------------------------------------
+
+_C_SOURCE="""%(banner)s%(self_promotion)s
+
+#include <sys/types.h>
+
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+#include "%(header_path)s"
+
+/* Private view of opaque FSM structure */
+struct %(struct_name)s {
+	enum %(enum_name)s current_state;
+};
+%(state_func_prototypes)s
+static int
+_is_%(enum_name)s_valid(enum %(enum_name)s n)
+{
+	if (!(n >= %(min_valid)s && n <= %(max_valid)s))
+		return -1;
+	return 0;
+}
+
+const char *
+%(enum_to_string_func)s(enum %(enum_name)s n)
+{
+	const char *state_names[] = {
+%(enum_contents)s	};
+
+	if (_is_%(enum_name)s_valid(n) != 0)
+		return NULL;
+	return state_names[n];
+}
+
+const char *
+%(enum_to_string_func)s_safe(enum %(enum_name)s n)
+{
+	const char *r = %(enum_to_string_func)s(n);
+
+	return r == NULL ? "[INVALID]" : r;
+}
+
+%(init_func_def)s
+
+void
+%(free_func)s(struct %(struct_name)s *fsm)
+{
+	memset(fsm, '\\0', sizeof(fsm));
+	free(fsm);
+}
+
+enum %(enum_name)s
+%(current_state_func)s(struct %(struct_name)s *fsm)
+{
+	return fsm->current_state;
+}
+
+int
+%(advance_func)s(struct %(struct_name)s *fsm, enum %(enum_name)s new_state,
+    char *errbuf, size_t errlen)
+{
+	enum %(enum_name)s old_state;
+
+	/* Sanity check states */
+	if (_is_%(enum_name)s_valid(fsm->current_state) != 0) {
+		if (errlen > 0 && errbuf != NULL) {
+			snprintf(errbuf, errlen, "Invalid current_state (%%d)",
+			    fsm->current_state);
+		}
+		return -1;
+	}
+	if (_is_%(enum_name)s_valid(new_state) != 0) {
+		if (errlen > 0 && errbuf != NULL) {
+			snprintf(errbuf, errlen, "Invalid new_state (%%d)",
+			    fsm->current_state);
+		}
+		return -1;
+	}
+
+	/* Transition checks */
+	switch (fsm->current_state) {
+%(transition_check)s	}
+%(entry_preconds)s%(exit_preconds)s
+	/* Switch state now */
+	old_state = fsm->current_state;
+	fsm->current_state = new_state;
+%(trans_funcs)s
+	return 0;
+
+ bad_transition:
+	if (errlen > 0 && errbuf != NULL) {
+		snprintf(errbuf, errlen,
+		    "Illegal state transition attempted: %%s -> %%s",
+		    %(enum_to_string_func)s_safe(fsm->current_state),
+		    %(enum_to_string_func)s_safe(new_state));
+	}
+	return -1;
+%(error_handlers)s}
+"""
+
+# -------------------------------------------------------------------------
 
 if __name__ == '__main__': main()
 
