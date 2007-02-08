@@ -1,3 +1,5 @@
+label the transitions an allow state advance by these labels
+
 per-transtion function calls/preconditions
 
 implement transition checks as a packed (bit vector) adjacency matrix
@@ -24,3 +26,6 @@ templatise the code sections in cfsm
 generation of C source without the header is broken
 	options for "header filename" and "include guard"?
 	(cruddy workaround in place: must generate both at once)
+
+reentrance protection?
+	set a flag in the fsm struct in state_advance
