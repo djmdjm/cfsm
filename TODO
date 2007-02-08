@@ -1,5 +1,8 @@
 per-transtion function calls/preconditions
 
+implement transition checks as a packed (bit vector) adjacency matrix
+rather than a rat's nest of switch() statements
+
 improve graphviz output
 	display preconditions
 	display transition calls
@@ -15,8 +18,8 @@ state_reset() function
 	(probably don't need this)
 
 templatise the code sections in cfsm
-	done as much as I can without a template language (and I don't want
-	external dependancies)
+	done as much as I can without a template language and I don't want
+	external dependancies (perhaps ship and use ezt.py)
 
 generation of C source without the header is broken
 	options for "header filename" and "include guard"?
