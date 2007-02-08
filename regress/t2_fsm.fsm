@@ -1,0 +1,16 @@
+# This file is in the public domain
+# Damien Miller 2007-02-08
+
+state T1a
+	initial-state
+	next-state T2
+state T1b
+	initial-state
+	next-state T2
+state T2
+	next-state T3
+state T3
+	next-state T2
+	next-state T4
+state T4
+

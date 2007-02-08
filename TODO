@@ -1,4 +1,4 @@
-per-transtion function calls
+per-transtion function calls/preconditions
 
 improve graphviz output
 	display preconditions
@@ -7,5 +7,11 @@ improve graphviz output
 more regress tests
 
 better documentation
+	BNF for parser
 
 state_reset() function
+
+templatise the code sections in cfsm
+
+generation of C source without the header is broken
+	options for "header filename" and "include guard"?

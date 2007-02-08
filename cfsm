@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # Copyright 2007 Damien Miller <djm@mindrot.org>
 #
@@ -18,84 +18,6 @@
 # generated C source file, header and dot graph). If you find cfsm
 # useful and use it in your project, then a credit notice in the source
 # or documentation would be appreciated, but is not required.
-
-"""
-Finite state machine compiler
-
-This program compiles a high-level textual description of a finite state
-machine into a C source file, header and/or a graphviz dot file. It
-requires all state transitions to be explicitly labelled and will
-disallow transitions that aren't permitted. It also supports "precondition"
-functions that are required to succeed before a state transition is allowed
-to occur and "transition functions" that are called upon transitions. Both
-the preconditions and transition functions are per-state, and can be defined
-to fire at state entry or exit
-
-An example state machine that shows off most of the directives:
-
-# -------------------------------------------------------------------
-# Comments are delimited with a '#' character and may start anywhere
-# on a line. Blank lines are ignored.
-
-# Define the enumeration type the state machine will use
-state-enum-type mystate
-
-# Define the names of the exported API functions
-current-state-function mystate_current
-initialise-function mystate_init
-advance-function mystate_advance
-enum-to-string-function mystate_tostring
-
-# Define a state
-state INITIAL_1
-	# Mark this as an "initial" state. FSMs compiled by cfsm require
-	# at least one initial state
-	initial-state
-	# Define one or more states that can be advanced to from this state
-	next-state EXCITED_STATE
-
-state INITIAL_2
-	# Make this an initial state too. If there are multiple initial states
-	# defined, cfsm will emit a "initialise-function" that must be called
-	# to explicitly initialise the FSM. If only one initial state is
-	# defined, then cfsm will just use it (no initialisation required)
-	initial-state
-	next-state EXCITED_STATE
-	# Define an exit precondition. This will call a function:
-	#    int is_excited(enum mystate current_state, enum mystate new_state)
-	# and will refuse to advance to another state unless it signals
-	# satisfaction by returning zero
-	exit-precondition check_excitation
-
-state EXCITED_STATE
-	# Define an entry transition function. This will have a signature of:
-	#    void now_excited(enum mystate old_state, enum mystate new_state)
-	# It will be called every time this state is entered
-	onentry-func now_excited
-	# It is possible to have define "loopback" transitions. These will
-	# still need to obey all preconditions and will trigger transition
-	# functions
-	next-state EXCITED_STATE
-	next-state GROUND_STATE
-
-state GROUND_STATE
-	# Define an entry precondition. These have the same signature as the
-	# exit-precondition above
-	entry-precondition ready_to_emit_photon
-	next-state EXCITED_STATE
-	# Define an exit transition function. Same signature as onentry-func
-	onexit-func absorb_a_photon
-
-# Add a banner to our ourput
-source-banner
-/*
- * This banner gets copied to both the source and header files.
- * It is useful for copyright notices, etc. It continues until the 
- * end-source-banner directive appears at the start of a line
- */
-end-source-banner
-# -------------------------------------------------------------------
-"""
 
 import re
 import sys
@@ -154,8 +76,10 @@ def main():
 		'exit-precondition'		: [ True, 2 ],
 		'onexit-func'			: [ True, 2 ],
 		'initial-state'			: [ True, 1 ],
+		'fsm-struct-type'		: [ False, 2 ],
 		'state-enum-type'		: [ False, 2 ],
 		'advance-function'		: [ False, 2 ],
+		'free-function'			: [ False, 2 ],
 		'initialise-function'		: [ False, 2 ],
 		'initialize-function'		: [ False, 2 ],
 		'current-state-function'	: [ False, 2 ],
@@ -211,11 +135,15 @@ def main():
 				state.add_post_exit_func(terms[1])
 			elif terms[0] == 'initial-state':
 				state.initial = True
+			elif terms[0] == 'fsm-struct-type':
+				fsm.struct_name = terms[1]
 			elif terms[0] == 'state-enum-type':
 				fsm.enum_name = terms[1]
 			elif terms[0] == 'initialise-function' or \
 			     terms[0] == 'initialize-function':
 				fsm.init_func = terms[1]
+			elif terms[0] == 'free-function':
+				fsm.free_func = terms[1]
 			elif terms[0] == 'advance-function':
 				fsm.advance_func = terms[1]
 			elif terms[0] == 'current-state-function':
@@ -259,7 +187,9 @@ class FSM:
 		self.state_list = []
 		self.states = {}
 		self.enum_name = "state"
-		self.init_func = "state_initialise"
+		self.struct_name = "fsm"
+		self.free_func = "state_free"
+		self.init_func = "state_init"
 		self.advance_func = "state_advance"
 		self.enum_to_string_func = "state_ntop"
 		self.current_state_func = "state_current"
@@ -313,22 +243,64 @@ enum %s {""" % (guard, guard, self.enum_name)
 			print >> h, "	%s = %u," % (state.name, i)
 			i += 1
 
-		need_init = len([s for s in self.state_list if s.initial]) > 1
-		caveat = ""
-		if need_init:
-			caveat = """
- * The return value from this function is undefined if the FSM has not been
- * initialised with """ + self.init_func
+		init_states = [s.name for s in self.state_list if s.initial]
+		need_init = len(init_states) > 1
 
 		print >> h, \
 """};
+
+/*
+ * The FSM object itself. This is intentionally opaque - all access must be
+ * through this API
+ */
+struct %s;""" % (self.struct_name)
+
+		if need_init:
+			print >> h, \
+"""
+/*
+ * Allocate a new FSM and set its starting state to "initial_state".
+ * Will return a pointer to the opaque FSM structure on success or 
+ * NULL on failure. If "errbuf" is not NULL, upto "errlen" bytes of
+ * error message will be copied into "errbuf" on failure.
+ */
+struct %(struct)s *%(init_func)s(enum %(enum_name)s initial_state,
+    char *errbuf, size_t errlen);
+""" % {
+			    "struct" : self.struct_name,
+			    "init_func" : self.init_func,
+			    "enum_name" : self.enum_name
+			}
+		else:
+			print >> h, \
+"""
+/*
+ * Allocate a new FSM and set its starting state to %(init_state)s
+ * Will return a pointer to the opaque FSM structure on success or 
+ * NULL on failure. If "errbuf" is not NULL, upto "errlen" bytes of
+ * error message will be copied into "errbuf" on failure.
+ */
+struct %(struct)s *%(init)s(char *errbuf, size_t errlen);
+""" % {
+			    "struct" : self.struct_name,
+			    "init" : self.init_func,
+			    "init_state" : init_states[0]
+			}
+
+
+		print >> h, \
+"""/*
+ * Free a FSM created with %(init_func)s()
+ */
+void %(free_func)s(struct %(struct_name)s *fsm);
 
 /*
  * Attempt to advance to the state specified by "new_state". Will return
  * 0 on success, -1 on failure. If "errbuf" is not NULL, upto "errlen"
  * bytes of error message will be copied into "errbuf" on failure.
  */
-int %(advance_func)s(enum %(enum_name)s new_state, char *errbuf, size_t errlen);
+int %(advance_func)s(struct %(struct_name)s *fsm, enum %(enum_name)s new_state,
+    char *errbuf, size_t errlen);
 
 /*
  * Convert from the %(enum_name)s enumeration to a string. Will return
@@ -344,52 +316,51 @@ const char *%(enum_to_string_func)s(enum %(enum_name)s);
 const char *%(enum_to_string_func)s_safe(enum %(enum_name)s);
 
 /*
- * Returns the current state of the FSM.%(caveat)s
+ * Returns the current state of the FSM.
  */
-enum %(enum_name)s %(current_state_func)s(void);
+enum %(enum_name)s %(current_state_func)s(struct %(struct_name)s *fsm);
 """ % {
-		    "caveat" : caveat,
+		    "struct_name" : self.struct_name,
 		    "enum_name" : self.enum_name,
+		    "init_func" : self.init_func,
+		    "free_func" : self.free_func,
 		    "advance_func" : self.advance_func,
 		    "enum_to_string_func" : self.enum_to_string_func,
 		    "current_state_func" : self.current_state_func
 		}
-		if need_init:
-			print >> h, \
-"""/*
- * Set the starting state of the FSM to "initial_state". The FSM cannot
- * be used until this function has returned sucessfully. Will return 0
- * on success, -1 on failure. If "errbuf" is not NULL, upto "errlen"
- * bytes of error message will be copied into "errbuf" on failure.
- */
-int %(init)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen);
-""" % { "init" : self.init_func, "enum_name" : self.enum_name}
 		print >> h, "#endif /* %s */" % guard
 
 	def _output_state_validity_checks(self, h):
 		# Output current_state and new_state sanity checks
-		print >> h, "	/* Sanity check states */"
-		for which in "current", "new":
-			print >> h, \
-"""	if (!(%(name)s_state >= %(ok1)s && %(name)s_state <= %(ok2)s)) {
+		print >> h, \
+"""	/* Sanity check states */
+	if (!(fsm->current_state >= %(ok1)s &&
+	    fsm->current_state <= %(ok2)s)) {
 		if (errlen > 0 && errbuf != NULL) {
-			snprintf(errbuf, errlen, "Invalid %(name)s_state (%%d)",
-			    %(name)s_state);
+			snprintf(errbuf, errlen, "Invalid current_state (%%d)",
+			    fsm->current_state);
+		}
+		return -1;
+	}
+	if (!(new_state >= %(ok1)s &&
+	    new_state <= %(ok2)s)) {
+		if (errlen > 0 && errbuf != NULL) {
+			snprintf(errbuf, errlen, "Invalid new_state (%%d)",
+			    fsm->current_state);
 		}
 		return -1;
 	}""" % {
-		    "name" : which,
 		    "ok1" : self.state_list[0].name,
 		    "ok2" : self.state_list[-1].name,
 		}
-		print >> h, ""
 
 	def _output_transition_checks(self, h):
 		# XXX this might be better done using an adjacency matrix
 		#     (perhaps packed into a bit vector for space)
 		# Output transition validity checking
-		print >> h, "	/* Transition checks */"
-		print >> h, "	switch (current_state) {"
+		print >> h, """
+	/* Transition checks */
+	switch (fsm->current_state) {"""
 		for state in self.state_list:
 			print >> h, "	case %s:" % state.name
 			if len(state.next_states) == 0:
@@ -412,7 +383,7 @@ int %(init)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen);
 		if which == "entry":
 			var = "new_state"
 		elif which == "exit":
-			var = "current_state"
+			var = "fsm->current_state"
 		else:
 			raise ValueError, "bogus which \"%s\"" % which
 
@@ -427,7 +398,8 @@ int %(init)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen);
 				switch_started = True
 			print >> h, "	case %s:" % state.name
 			for func in funcs:
-				func_call = func + "(current_state, new_state)"
+				func_call = func + \
+				    "(fsm->current_state, new_state)"
 				if critical:
 					print >> h, \
 					    "\t\tif (%s != 0)" % func_call
@@ -442,12 +414,14 @@ int %(init)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen);
 			print >> h, \
 			    "		break; /* Hush compiler warnings */"
 			print >> h, "	}\n"
+		return switch_started
 
 	def _output_preconditions(self, h):
-		self._output_state_change_calls(h, "preconditions",
+		i = self._output_state_change_calls(h, "preconditions",
 		    "exit", "pre_exit_funcs", True)
-		self._output_state_change_calls(h, "preconditions",
+		o = self._output_state_change_calls(h, "preconditions",
 		    "entry", "pre_entry_funcs", True)
+		return i, o
 				
 	def _output_transition_calls(self, h):
 		self._output_state_change_calls(h, "transition functions",
@@ -480,30 +454,36 @@ int %(init)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen);
 			    (func, self.enum_name, self.enum_name)
 		print >> h, ""
 			
-	def _output_state_advance_func(self, h, need_init_check):
+	def _output_private_struct_decl(self, h):
+		print >> h, \
+"""
+/* Private view of opaque FSM structure */
+struct %(struct_name)s {
+	enum %(enum_name)s current_state;
+};
+""" % { "enum_name" : self.enum_name, "struct_name" : self.struct_name }
+
+	def _output_state_advance_func(self, h):
 		print >> h, \
 """int
-%s(enum %s new_state, char *errbuf, size_t errlen)
+%(advance_func)s(struct %(struct_name)s *fsm, enum %(enum_name)s new_state,
+    char *errbuf, size_t errlen)
 {
-	enum %s old_state;
-""" % (self.advance_func, self.enum_name, self.enum_name)
+	enum %(enum_name)s old_state;
+""" % {
+		    "advance_func": self.advance_func,
+		    "enum_name" : self.enum_name,
+		    "struct_name" : self.struct_name
+		}
 
-		if need_init_check:
-			print >> h, \
-"""	if (!initialised) {
-		if (errlen > 0 && errbuf != NULL)
-			snprintf(errbuf, errlen, "FSM not initialised");
-		return -1;
-	}
-"""
 		self._output_state_validity_checks(h)
 		self._output_transition_checks(h)
-		self._output_preconditions(h)
+		precond_entry, precond_exit = self._output_preconditions(h)
 
 		print >> h, \
 """	/* Switch state now */
-	old_state = current_state;
-	current_state = new_state;
+	old_state = fsm->current_state;
+	fsm->current_state = new_state;
 """
 		self._output_transition_calls(h)
 
@@ -514,42 +494,53 @@ int %(init)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen);
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "Illegal state transition attempted: %%s -> %%s",
-		    %(enum_to_string)s_safe(current_state),
+		    %(enum_to_string)s_safe(fsm->current_state),
 		    %(enum_to_string)s_safe(new_state));
 	}
-	return -1;
- entry_precond_fail:
+	return -1;""" % { "enum_to_string" : self.enum_to_string_func }
+
+		if precond_entry:
+			print >> h, \
+""" entry_precond_fail:
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "State %%s entry precondition not satisfied",
 		    %(enum_to_string)s_safe(new_state));
 	}
-	return -1;
- exit_precond_fail:
+	return -1;""" % { "enum_to_string" : self.enum_to_string_func }
+
+		if precond_exit:
+			print >> h, \
+""" exit_precond_fail:
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "State %%s exit precondition not satisfied",
-		    %(enum_to_string)s_safe(current_state));
+		    %(enum_to_string)s_safe(fsm->current_state));
 	}
-	return -1;
-}
-""" % { "enum_to_string" : self.enum_to_string_func }
+	return -1;""" % { "enum_to_string" : self.enum_to_string_func }
+
+		print >> h, "}\n"
 
 	def _output_state_init_func(self, h):
-		print >> h, """
-int
+		init_states = [s.name for s in self.state_list if s.initial]
+		need_init = len(init_states) > 1
+		
+		if need_init:
+			print >> h, \
+"""struct %(struct_name)s *
 %(init_func)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen)
 {
-	switch (initial_state) {""" % {
-		    "init_func" : self.init_func,
-		    "enum_name" : self.enum_name
-		}
+	struct %(struct_name)s *ret = NULL;
 
-		for state in self.state_list:
-			if not state.initial:
-				continue;
-			print >> h, "	case %s:" % state.name
-		print >> h, \
+	switch (initial_state) {""" % {
+			    "init_func" : self.init_func,
+			    "enum_name" : self.enum_name,
+			    "struct_name" : self.struct_name
+			}
+
+			for state in init_states:
+				print >> h, "	case %s:" % state
+			print >> h, \
 """		break;
 	default:
 		if (errlen > 0 && errbuf != NULL) {
@@ -558,13 +549,47 @@ int
 			    %(enum_to_string)s_safe(initial_state),
 			    initial_state);
 		}
-		return -1;
+		return NULL;
 	}
-	current_state = initial_state;
-	initialised = 1;
-	return 0;
+	if ((ret = calloc(1, sizeof(*ret))) == NULL) {
+		if (errlen > 0 && errbuf != NULL)
+			snprintf(errbuf, errlen, "Memory allocation failed");
+		return NULL;
+	}
+	ret->current_state = initial_state;
+	return ret;
 }
 """ % { "enum_to_string" : self.enum_to_string_func }
+		else:
+			print >> h, \
+"""struct %(struct_name)s *
+%(init_func)s(char *errbuf, size_t errlen)
+{
+	struct %(struct_name)s *ret = NULL;
+
+	if ((ret = calloc(1, sizeof(*ret))) == NULL) {
+		if (errlen > 0 && errbuf != NULL)
+			snprintf(errbuf, errlen, "Memory allocation failed");
+		return NULL;
+	}
+	ret->current_state = %(initial_state)s;
+	return ret;
+}""" % {
+			    "init_func" : self.init_func,
+			    "enum_name" : self.enum_name,
+			    "struct_name" : self.struct_name,
+			    "initial_state" : init_states[0]
+			}
+
+	def _output_state_free_func(self, h):
+		print >> h, \
+"""void
+%(free_func)s(struct %(struct_name)s *fsm)
+{
+	memset(fsm, '\\0', sizeof(fsm));
+	free(fsm);
+}
+""" % { "free_func" : self.free_func, "struct_name" : self.struct_name }
 
 	def _output_enum_to_string_funcs(self, h):
 		print >> h, \
@@ -595,12 +620,16 @@ const char *
 
 	def _output_current_state_func(self, h):
 		print >> h, \
-"""enum %s
-%s(void)
+"""enum %(enum_name)s
+%(current_state_func)s(struct %(struct_name)s *fsm)
 {
-	return current_state;
+	return fsm->current_state;
 }
-""" % (self.enum_name, self.current_state_func)
+""" % {
+		    "enum_name" : self.enum_name,
+		    "struct_name" : self.struct_name,
+		    "current_state_func" : self.current_state_func
+		}
 
 	def output_source(self, h, header_path):
 		if self.source_banner is not None:
@@ -608,28 +637,17 @@ const char *
 		self._output_selfpromotion(h)
 
 		print >> h, "#include <sys/types.h>\n"
+		print >> h, "#include <stdlib.h>"
+		print >> h, "#include <string.h>"
 		print >> h, "#include <stdio.h>\n"
-		print >> h, "#include \"%s\"\n" % header_path
+		print >> h, "#include \"%s\"" % header_path
 
+		self._output_private_struct_decl(h)
 		self._output_state_func_prototypes(h)
-
 		self._output_enum_to_string_funcs(h)
-
-		# If there is no unique starting state then emit code to
-		# select one
-		init_states = [s.name for s in self.state_list if s.initial]
-		if len(init_states) > 1:
-			print >> h, "static enum %s current_state;" % \
-			    self.enum_name
-			print >> h, "static int initialised = 0;"
-			print >> h, ""
-			self._output_state_init_func(h)
-		else:
-			print >> h, "static enum %s current_state = %s;" % \
-			    (self.enum_name, init_states[0])
-
-		print >> h, ""
-		self._output_state_advance_func(h, len(init_states) > 1)
+		self._output_state_init_func(h)
+		self._output_state_free_func(h)
+		self._output_state_advance_func(h)
 		self._output_current_state_func(h)
 
 	def output_dot(self, h):

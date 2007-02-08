@@ -1,0 +1,9 @@
+20070208
+ - (djm) Generalised the generated code: a FSM is now an opaque structure
+   rather than having only one per generated source file
+ - (djm) Add a regress test for the multiple initial-state case
+
+20070207
+ - (djm) Initial import of cfsm
+
+

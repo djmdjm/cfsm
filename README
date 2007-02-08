@@ -16,8 +16,9 @@ source and header as well as a graph in "dot" format:
 
 ./cfsm.py -C example.c -H example.h -D example.dot example.fsm 
 
-The FSM is very self-contained; just five functions and an enum at most.
-They are reasonably self-documenting too - please have a look at the 
-comments in the generated header file for API usage.
+The FSM is very self-contained; just six functions, an opaque struct and
+an enum (you get to pick their names). They are reasonably self-documenting
+too - please have a look at the comments in the generated header file for
+API usage.
 
 Damien Miller <djm@mindrot.org> 2007-02-07

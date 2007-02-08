@@ -2,12 +2,14 @@
 # Comments are delimited with a '#' character and may start anywhere
 # on a line. Blank lines are ignored.
 
-# Define the enumeration type the state machine will use
+# Define the enumeration and opaque struct types the state machine will use
 state-enum-type mystate
+fsm-struct-type myfsm
 
 # Define the names of the exported API functions
 current-state-function mystate_current
 initialise-function mystate_init
+free-function mystate_free
 advance-function mystate_advance
 enum-to-string-function mystate_tostring
 
