@@ -5,6 +5,8 @@ improve graphviz output
 	display transition calls
 
 more regress tests
+	test parser
+	test consistency checks
 
 better documentation
 	BNF for parser
