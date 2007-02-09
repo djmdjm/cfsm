@@ -1,4 +1,12 @@
 20070208
+ - (djm) Mutable function signatures for the transition and precondition
+   callbacks. You can now specify zero or more of: current_state, new_state,
+   (void *)ctx. Also add ctx settor functions that are emitted if a ctx is
+   included in a callback's signature
+ - (djm) Add a regress test that exercises the example.fsm file in the top
+   level directory. If I ship an example, it had better work!
+
+20070208
  - (djm) Generalised the generated code: a FSM is now an opaque structure
    rather than having only one per generated source file
  - (djm) Add a regress test for the multiple initial-state case

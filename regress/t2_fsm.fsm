@@ -1,6 +1,9 @@
 # This file is in the public domain
 # Damien Miller 2007-02-08
 
+precondition-function-args none
+transition-function-args old-state,ctx
+
 state T1a
 	initial-state
 	next-state T2

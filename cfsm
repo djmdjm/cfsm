@@ -84,7 +84,11 @@ def main():
 		'initialize-function'		: [ False, 2 ],
 		'current-state-function'	: [ False, 2 ],
 		'enum-to-string-function'	: [ False, 2 ],
+		'set-transition-ctx-function'	: [ False, 2 ],
+		'set-precondition-ctx-function'	: [ False, 2 ],
 		'source-banner'			: [ False, 1 ],
+		'precondition-function-args'	: [ False, 2 ],
+		'transition-function-args'	: [ False, 2 ],
 	}
 
 	lnum = 0
@@ -147,9 +151,13 @@ def main():
 			elif terms[0] == 'advance-function':
 				fsm.advance_func = terms[1]
 			elif terms[0] == 'current-state-function':
-				fsm.cuttent_state_func = terms[1]
+				fsm.current_state_func = terms[1]
 			elif terms[0] == 'enum-to-string-function':
 				fsm.enum_to_string_func = terms[1]
+			elif terms[0] == 'set-transition-ctx-function':
+				fsm.trans_ctx_set_func = terms[1]
+			elif terms[0] == 'set-precondition-ctx-function':
+				fsm.precond_ctx_set_func = terms[1]
 			elif terms[0] == 'source-banner':
 				source_banner = ""
 				for l in input_file:
@@ -161,6 +169,42 @@ def main():
 					raise ValueError, \
 					   "EOF looking for end-source-banner"
 				fsm.source_banner = source_banner
+			elif terms[0] == 'precondition-function-args':
+				fsm.precond_arg_current = False
+				fsm.precond_arg_new = False
+				fsm.precond_arg_ctx = False
+				for arg in terms[1].split(','):
+					arg = arg.strip()
+					if arg == 'none':
+						pass
+					elif arg == 'old-state':
+						fsm.precond_arg_current = True
+					elif arg == 'new-state':
+						fsm.precond_arg_new = True
+					elif arg == 'ctx':
+						fsm.precond_arg_ctx = True
+					else:
+						raise ValueError, \
+						    "Invalid %s argument %s" % \
+						    (terms[0], terms[1])
+			elif terms[0] == 'transition-function-args':
+				fsm.trans_arg_current = False
+				fsm.trans_arg_new = False
+				fsm.trans_arg_ctx = False
+				for arg in terms[1].split(','):
+					arg = arg.strip()
+					if arg == 'none':
+						pass
+					elif arg == 'old-state':
+						fsm.trans_arg_current = True
+					elif arg == 'new-state':
+						fsm.trans_arg_new = True
+					elif arg == 'ctx':
+						fsm.trans_arg_ctx = True
+					else:
+						raise ValueError, \
+						    "Invalid %s argument %s" % \
+						    (terms[0], terms[1])
 
 		except ValueError, e:
 				print >> sys.stderr, "line %d:" % lnum, e
@@ -193,7 +237,15 @@ class FSM:
 		self.advance_func = "state_advance"
 		self.enum_to_string_func = "state_ntop"
 		self.current_state_func = "state_current"
+		self.trans_ctx_set_func = "state_set_transition_cb_ctx"
+		self.precond_ctx_set_func = "state_set_precondition_cb_ctx"
 		self.source_banner = None
+		self.precond_arg_current = True
+		self.precond_arg_new = True
+		self.precond_arg_ctx = True
+		self.trans_arg_current = True
+		self.trans_arg_new = True
+		self.trans_arg_ctx = True
 
 	def add_state(self, state):
 		if state.name in self.states:
@@ -232,6 +284,19 @@ class FSM:
 		else:
 			init_func_proto_comments = _INIT_FUNC_SINGLE
 
+		trans_ctx_proto = ""
+		if self.trans_arg_ctx:
+			trans_ctx_proto = _TRANS_SET_CTX_PROTO_COMMENTS % {
+			    "struct_name" : self.struct_name,
+			    "trans_set_ctx_func" : self.trans_ctx_set_func,
+			}
+		precond_ctx_proto = ""
+		if self.precond_arg_ctx:
+			precond_ctx_proto = _PRECOND_SET_CTX_PROTO_COMMENTS % {
+			    "struct_name" : self.struct_name,
+			    "precond_set_ctx_func" : self.precond_ctx_set_func,
+			}
+
  		init_func_proto_comments %= {
 			    "struct_name" : self.struct_name,
 			    "init_func" : self.init_func,
@@ -251,7 +316,9 @@ class FSM:
 		    "free_func" : self.free_func,
 		    "advance_func" : self.advance_func,
 		    "enum_to_string_func" : self.enum_to_string_func,
-		    "current_state_func" : self.current_state_func
+		    "current_state_func" : self.current_state_func,
+		    "trans_ctx_proto" : trans_ctx_proto,
+		    "precond_ctx_proto" : precond_ctx_proto,
 		}
 
 	def _build_state_func_prototypes(self):
@@ -266,11 +333,38 @@ class FSM:
 				actions[func] = True
 			for func in state.post_exit_funcs:
 				actions[func] = True
+
+		proto = []
+		if self.trans_arg_current:
+			proto.append(_TRANS_FUNC_PROTO_CURRENT)
+		if self.trans_arg_new:
+			proto.append(_TRANS_FUNC_PROTO_NEW)
+		if self.trans_arg_ctx:
+			proto.append(_TRANS_FUNC_PROTO_CTX)
+		if len(proto) == 0:
+			proto.append(_TRANS_FUNC_PROTO_NOARGS)
+		trans_prototype = _TRANS_FUNC_PROTO_START
+		trans_prototype += ", ".join(proto)
+		trans_prototype += _TRANS_FUNC_PROTO_END
+
+		proto = []
+		if self.precond_arg_current:
+			proto.append(_PRECOND_FUNC_PROTO_CURRENT)
+		if self.precond_arg_new:
+			proto.append(_PRECOND_FUNC_PROTO_NEW)
+		if self.precond_arg_ctx:
+			proto.append(_PRECOND_FUNC_PROTO_CTX)
+		if len(proto) == 0:
+			proto.append(_PRECOND_FUNC_PROTO_NOARGS)
+		precond_prototype = _PRECOND_FUNC_PROTO_START
+		precond_prototype += ", ".join(proto)
+		precond_prototype += _PRECOND_FUNC_PROTO_END
+
 		ret = ""
 		if len(actions) > 0:
 			ret += _TRANS_FUNC_COMMENT
 		for func in actions:
-			ret += _TRANS_FUNC_PROTO % {
+			ret += trans_prototype % {
 			    "func" : func,
 			    "enum_name" : self.enum_name
 			}
@@ -278,7 +372,7 @@ class FSM:
 		if len(preconds) > 0:
 			ret += _PRECOND_FUNC_COMMENT
 		for func in preconds:
-			ret += _PRECOND_FUNC_PROTO % {
+			ret += precond_prototype % {
 			    "func" : func,
 			    "enum_name" : self.enum_name
 			}
@@ -317,6 +411,28 @@ class FSM:
 		else:
 			raise ValueError, "bogus which \"%s\"" % which
 
+		callsig = []
+		if self.trans_arg_current:
+			callsig.append(_TRANS_FUNC_CALLSIG_CURRENT)
+		if self.trans_arg_new:
+			callsig.append(_TRANS_FUNC_CALLSIG_NEW)
+		if self.trans_arg_ctx:
+			callsig.append(_TRANS_FUNC_CALLSIG_CTX)
+		trans_callsig = _TRANS_FUNC_CALLSIG_START
+		trans_callsig += ", ".join(callsig)
+		trans_callsig += _TRANS_FUNC_CALLSIG_END
+
+		callsig = []
+		if self.precond_arg_current:
+			callsig.append(_PRECOND_FUNC_CALLSIG_CURRENT)
+		if self.precond_arg_new:
+			callsig.append(_PRECOND_FUNC_CALLSIG_NEW)
+		if self.precond_arg_ctx:
+			callsig.append(_PRECOND_FUNC_CALLSIG_CTX)
+		precond_callsig = _PRECOND_FUNC_CALLSIG_START
+		precond_callsig += ", ".join(callsig)
+		precond_callsig += _PRECOND_FUNC_CALLSIG_END
+
 		switch_started = False
 		ret = ""
 		for state in self.state_list:
@@ -335,9 +451,9 @@ class FSM:
 			}
 			for func in funcs:
 				if critical:
-					frag = _PRECONDITION_FUNC_CALL
+					frag = precond_callsig
 				else:
-					frag = _TRANSITION_FUNC_CALL
+					frag = trans_callsig
 				ret += frag % {
 				    "which" : which,
 				    "func" : func
@@ -351,6 +467,27 @@ class FSM:
 		banner = ""
 		if self.source_banner is not None:
 			banner = self.source_banner + "\n"
+
+		trans_ctx_struct = ""
+		trans_ctx_init = ""
+		trans_ctx_set = ""
+		if self.trans_arg_ctx:
+			trans_ctx_struct = _TRANS_CTX_STRUCT
+			trans_ctx_init = _TRANS_CTX_INIT
+			trans_ctx_set = _TRANS_CTX_SET % {
+			    "trans_set_ctx_func" : self.trans_ctx_set_func,
+			    "struct_name" : self.struct_name,
+			}
+		precond_ctx_struct = ""
+		precond_ctx_init = ""
+		precond_ctx_set = ""
+		if self.precond_arg_ctx:
+			precond_ctx_struct = _PRECOND_CTX_STRUCT
+			precond_ctx_init = _PRECOND_CTX_INIT
+			precond_ctx_set = _PRECOND_CTX_SET % {
+			    "precond_set_ctx_func" : self.precond_ctx_set_func,
+			    "struct_name" : self.struct_name,
+			}
 
 		state_func_prototypes = self._build_state_func_prototypes()
 		transition_check = self._build_transition_checks()
@@ -385,12 +522,14 @@ class FSM:
 		    "\n".join(["\tcase %s:" % case for case in init_states])
 
 		init_func_def %= {
-			    "init_func" : self.init_func,
-			    "enum_name" : self.enum_name,
-			    "struct_name" : self.struct_name,
-			    "initial_state" : init_states[0],
-			    "init_state_cases" : init_state_cases,
-			    "enum_to_string_func" : self.enum_to_string_func,
+		    "init_func" : self.init_func,
+		    "enum_name" : self.enum_name,
+		    "struct_name" : self.struct_name,
+		    "initial_state" : init_states[0],
+		    "init_state_cases" : init_state_cases,
+		    "enum_to_string_func" : self.enum_to_string_func,
+		    "trans_init" : trans_ctx_init,
+		    "precond_init" : precond_ctx_init,
 		}
 
 		print >> h, _C_SOURCE % {
@@ -415,6 +554,10 @@ class FSM:
 		    "exit_funcs" : exit_funcs,
 		    "entry_funcs" : entry_funcs,
 		    "error_handlers" : error_handlers,
+		    "trans_struct" : trans_ctx_struct,
+		    "precond_struct" : precond_ctx_struct,
+		    "trans_set" : trans_ctx_set,
+		    "precond_set" : precond_ctx_set,
 		}
 
 	def output_dot(self, h):
@@ -448,6 +591,7 @@ class State:
 		self.pre_exit_funcs = []
 		self.post_exit_funcs = []
 		self.initial = False
+
 	def _name_check(self, name):
 		if re.match('^[A-Za-z_][A-Za-z0-9_]*$', name) is None:
 			raise ValueError, "Invalid name \"%s\"" % name
@@ -520,7 +664,7 @@ enum %(enum_name)s {
 struct %(struct_name)s;
 
 %(init_func_proto_comments)s
-
+%(trans_ctx_proto)s%(precond_ctx_proto)s
 /*
  * Free a FSM created with %(init_func)s()
  */
@@ -566,11 +710,32 @@ _PRECOND_FUNC_COMMENT = \
 /* Prototypes for precondition checks */
 """
 
-_TRANS_FUNC_PROTO = \
-"""void %(func)s(enum %(enum_name)s, enum %(enum_name)s);
+_TRANS_FUNC_PROTO_START = "void %(func)s("
+_TRANS_FUNC_PROTO_CURRENT = "enum %(enum_name)s"
+_TRANS_FUNC_PROTO_NEW = "enum %(enum_name)s"
+_TRANS_FUNC_PROTO_CTX = "void *"
+_TRANS_FUNC_PROTO_NOARGS = "void"
+_TRANS_FUNC_PROTO_END = ");\n"
+_PRECOND_FUNC_PROTO_START = "int %(func)s("
+_PRECOND_FUNC_PROTO_CURRENT = "enum %(enum_name)s"
+_PRECOND_FUNC_PROTO_NEW = "enum %(enum_name)s"
+_PRECOND_FUNC_PROTO_CTX = "void *"
+_PRECOND_FUNC_PROTO_NOARGS = "void"
+_PRECOND_FUNC_PROTO_END = ");\n"
+
+_TRANS_SET_CTX_PROTO_COMMENTS = \
 """
-_PRECOND_FUNC_PROTO = \
-"""int %(func)s(enum %(enum_name)s, enum %(enum_name)s);
+/*
+ * Set the transition callback context to "ctx"
+ */
+void %(trans_set_ctx_func)s(struct %(struct_name)s *fsm, void *ctx);
+"""
+_PRECOND_SET_CTX_PROTO_COMMENTS = \
+"""
+/*
+ * Set the transition precondition callback context to "ctx"
+ */
+void %(precond_set_ctx_func)s(struct %(struct_name)s *fsm, void *ctx);
 """
 
 # -------------------------------------------------------------------------
@@ -598,7 +763,7 @@ _STATE_INIT_FUNC_MULTI = \
 			snprintf(errbuf, errlen, "Memory allocation failed");
 		return NULL;
 	}
-	ret->current_state = initial_state;
+	ret->current_state = initial_state;%(trans_init)s%(precond_init)s
 	return ret;
 }"""
 
@@ -615,7 +780,7 @@ _STATE_INIT_FUNC_SINGLE = \
 			snprintf(errbuf, errlen, "Memory allocation failed");
 		return NULL;
 	}
-	ret->current_state = %(initial_state)s;
+	ret->current_state = %(initial_state)s;%(trans_init)s%(precond_init)s
 	return ret;
 }"""
 
@@ -638,12 +803,36 @@ _STATE_CALL_SWITCH_FINISH = \
 """
 # -------------------------------------------------------------------------
 
-_PRECONDITION_FUNC_CALL = \
-"""		if (%(func)s(fsm->current_state, new_state) != 0)
-			goto %(which)s_precond_fail;
+_PRECOND_FUNC_CALLSIG_CURRENT = "fsm->current_state"
+_PRECOND_FUNC_CALLSIG_NEW = "new_state"
+_PRECOND_FUNC_CALLSIG_CTX = "fsm->precond_ctx"
+_PRECOND_FUNC_CALLSIG_START = "\t\tif (%(func)s("
+_PRECOND_FUNC_CALLSIG_END = ") != 0)\n\t\t\tgoto %(which)s_precond_fail;\n"
+_TRANS_FUNC_CALLSIG_CURRENT = "fsm->current_state"
+_TRANS_FUNC_CALLSIG_NEW = "new_state"
+_TRANS_FUNC_CALLSIG_CTX = "fsm->trans_ctx"
+_TRANS_FUNC_CALLSIG_START = "\t\t%(func)s("
+_TRANS_FUNC_CALLSIG_END = ");\n"
+
+# -------------------------------------------------------------------------
+
+_TRANS_CTX_STRUCT = "\n\tvoid *trans_ctx;"
+_PRECOND_CTX_STRUCT = "\n\tvoid *precond_ctx;"
+_TRANS_CTX_INIT = "\n\tret->trans_ctx = NULL;"
+_PRECOND_CTX_INIT = "\n\tret->precond_ctx = NULL;"
+_TRANS_CTX_SET = \
+"""void
+%(trans_set_ctx_func)s(struct %(struct_name)s *fsm, void *ctx)
+{
+	fsm->trans_ctx = ctx;
+}
 """
-_TRANSITION_FUNC_CALL = \
-"""		%(func)s(fsm->current_state, new_state);
+_PRECOND_CTX_SET = \
+"""void
+%(precond_set_ctx_func)s(struct %(struct_name)s *fsm, void *ctx)
+{
+	fsm->precond_ctx = ctx;
+}
 """
 
 # -------------------------------------------------------------------------
@@ -682,7 +871,7 @@ _C_SOURCE="""%(banner)s%(self_promotion)s
 
 /* Private view of opaque FSM structure */
 struct %(struct_name)s {
-	enum %(enum_name)s current_state;
+	enum %(enum_name)s current_state;%(trans_struct)s%(precond_struct)s
 };
 %(state_func_prototypes)s
 static int
@@ -692,7 +881,7 @@ _is_%(enum_name)s_valid(enum %(enum_name)s n)
 		return -1;
 	return 0;
 }
-
+%(trans_set)s%(precond_set)s
 const char *
 %(enum_to_string_func)s(enum %(enum_name)s n)
 {

@@ -1,3 +1,5 @@
+optionally generate callback stubs into a separate file too
+
 label the transitions an allow state advance by these labels
 
 per-transtion function calls/preconditions
@@ -29,3 +31,5 @@ generation of C source without the header is broken
 
 reentrance protection?
 	set a flag in the fsm struct in state_advance
+
+ctx acessor functions?

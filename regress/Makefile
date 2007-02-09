@@ -1,5 +1,5 @@
 
-TARGETS=t1 t2 t3
+TARGETS=t0 t1 t2 t3
 
 all: $(TARGETS)
 	@echo -n "Running tests: "
@@ -9,6 +9,13 @@ all: $(TARGETS)
 		test "x$(VERBOSE)" = "x" || echo -n ' ' ; \
 	done
 	@echo ""
+
+# Make sure the example works!
+t0_fsm.c: ../example.fsm
+	../cfsm -C t0_fsm.c -H t0_fsm.h ../example.fsm
+
+t0: t0_fsm.c t0_fsm.o t0.o
+	$(CC) -o $@ t0.o t0_fsm.o
 
 t1_fsm.c: t1_fsm.fsm
 	../cfsm -C t1_fsm.c -H t1_fsm.h t1_fsm.fsm

@@ -7,11 +7,18 @@ state-enum-type mystate
 fsm-struct-type myfsm
 
 # Define the names of the exported API functions
-current-state-function mystate_current
-initialise-function mystate_init
-free-function mystate_free
-advance-function mystate_advance
-enum-to-string-function mystate_tostring
+current-state-function myfsm_current
+initialise-function myfsm_init
+free-function myfsm_free
+advance-function myfsm_advance
+enum-to-string-function myfsm_tostring
+set-transition-ctx-function myfsm_set_transition_ctx
+set-precondition-ctx-function myfsm_set_precondition_ctx
+
+# Specify what arguments we want to pass to the transition preconditions
+# and callbacks
+precondition-function-args old-state,ctx
+transition-function-args none
 
 # Define a state
 state INITIAL_1
