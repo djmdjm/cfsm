@@ -1,3 +1,6 @@
+20070311
+ - (djm) Parametise location of cfsm program for regression tests
+
 20070208
  - (djm) Mutable function signatures for the transition and precondition
    callbacks. You can now specify zero or more of: current_state, new_state,
