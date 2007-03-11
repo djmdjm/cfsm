@@ -1,5 +1,9 @@
 20070311
  - (djm) Parametise location of cfsm program for regression tests
+ - (djm) Some cleanup ahead of parser extension: make a fsm.new_state
+   static factory to create new State objects pre-bound to the fsm
+   (removes some ugly code). Extend parser table a little so we can accept
+   new statful keywords
 
 20070208
  - (djm) Mutable function signatures for the transition and precondition

@@ -69,31 +69,32 @@ def main():
 		sys.exit(1)
 
 	keywords = {
-		'state'				: [ False, 2 ],
-		'next-state'			: [ True, 2 ],
-		'entry-precondition'		: [ True, 2 ],
-		'onentry-func'			: [ True, 2 ],
-		'exit-precondition'		: [ True, 2 ],
-		'onexit-func'			: [ True, 2 ],
-		'initial-state'			: [ True, 1 ],
-		'fsm-struct-type'		: [ False, 2 ],
-		'state-enum-type'		: [ False, 2 ],
-		'advance-function'		: [ False, 2 ],
-		'free-function'			: [ False, 2 ],
-		'initialise-function'		: [ False, 2 ],
-		'initialize-function'		: [ False, 2 ],
-		'current-state-function'	: [ False, 2 ],
-		'enum-to-string-function'	: [ False, 2 ],
-		'set-transition-ctx-function'	: [ False, 2 ],
-		'set-precondition-ctx-function'	: [ False, 2 ],
-		'source-banner'			: [ False, 1 ],
-		'precondition-function-args'	: [ False, 2 ],
-		'transition-function-args'	: [ False, 2 ],
+		'state'				: [ None, 2 ],
+		'next-state'			: [ 'state', 2 ],
+		'entry-precondition'		: [ 'state', 2 ],
+		'onentry-func'			: [ 'state', 2 ],
+		'exit-precondition'		: [ 'state', 2 ],
+		'onexit-func'			: [ 'state', 2 ],
+		'initial-state'			: [ 'state', 1 ],
+		'fsm-struct-type'		: [ None, 2 ],
+		'state-enum-type'		: [ None, 2 ],
+		'advance-function'		: [ None, 2 ],
+		'free-function'			: [ None, 2 ],
+		'initialise-function'		: [ None, 2 ],
+		'initialize-function'		: [ None, 2 ],
+		'current-state-function'	: [ None, 2 ],
+		'enum-to-string-function'	: [ None, 2 ],
+		'set-transition-ctx-function'	: [ None, 2 ],
+		'set-precondition-ctx-function'	: [ None, 2 ],
+		'source-banner'			: [ None, 1 ],
+		'precondition-function-args'	: [ None, 2 ],
+		'transition-function-args'	: [ None, 2 ],
 	}
 
 	lnum = 0
 	fsm = FSM()
 	state = None
+	event = None
 	banner = None
 	input_file = open(input_path)
 	for line in input_file:
@@ -110,21 +111,25 @@ def main():
 			print >> sys.stderr, "line %d:" % lnum, \
 			    "unsupported directive \"%s\"" % terms[0]
 			sys.exit(1)
-		if len(terms) != keywords[terms[0]][1]:
+		expected_state, num_terms = keywords[terms[0]]
+		if len(terms) != num_terms:
 			print >> sys.stderr, "line %d:" % lnum, \
 			    "syntax error"
 			sys.exit(1)
-		if keywords[terms[0]][0] and state is None:
+		if expected_state == 'state' and state is None:
 			print >> sys.stderr, "line %d:" % lnum, \
 			    terms[0], "cannot be used outside of", \
 			    "a state definition"
 			sys.exit(1)
+		if expected_state == 'event' and event is None:
+			print >> sys.stderr, "line %d:" % lnum, \
+			    terms[0], "cannot be used outside of", \
+			    "an event definition"
+			sys.exit(1)
 
 		try:
 			if terms[0] == 'state':
-				if state is not None:
-					fsm.add_state(state)
-				state = State(terms[1])
+				state = fsm.new_state(terms[1])
 			elif terms[0] == 'next-state':
 				state.add_next_state(terms[1])
 				# XXX support:
@@ -210,9 +215,6 @@ def main():
 				print >> sys.stderr, "line %d:" % lnum, e
 				sys.exit(1)
 
-	if state is not None:
-		fsm.add_state(state)
-
 	try:
 		fsm.finalise()
 	except ValueError, e:
@@ -247,11 +249,13 @@ class FSM:
 		self.trans_arg_new = True
 		self.trans_arg_ctx = True
 
-	def add_state(self, state):
-		if state.name in self.states:
-			raise ValueError, "State %s already added" % state.name
+	def new_state(self, name):
+		if name in self.states:
+			raise ValueError, "State %s already added" % name
+		state = State(name)
 		self.state_list.append(state)
 		self.states[state.name] = state
+		return state
 
 	def finalise(self):
 		indegrees = dict([ (s, 0) for s in self.states])
