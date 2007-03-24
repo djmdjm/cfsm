@@ -1,5 +1,8 @@
 20070324
  - (djm) Implement event-driven FSMs
+ - (djm) Remove the ctx settor functions in favour of passing in a ctx
+   to the state advance function. Quite a bit simpler and matches what most
+   apps do better.
 
 20070311
  - (djm) Parametise location of cfsm program for regression tests

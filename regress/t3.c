@@ -39,7 +39,7 @@ main(int argc, char **argv)
 	/* T1b -> T2 - expect fail */
 	assert((fsm = state_init(T1b, NULL, 0)) != NULL);
 	assert(t1b_exit_pre_visited == 0);
-	assert(state_advance(fsm, T2, NULL, 0) == -1);
+	assert(state_advance(fsm, T2, NULL, NULL, 0) == -1);
 	assert(state_current(fsm) == T1b);
 	assert(t1b_exit_pre_visited == 1);
 	assert(t2_enter_visited == 0);
@@ -58,7 +58,7 @@ main(int argc, char **argv)
 	assert(t1a_entry_pre_visited == 0);
 
 	/* T1b -> T2 - expect success */
-	assert(state_advance(fsm, T2, NULL, 0) == 0);
+	assert(state_advance(fsm, T2, NULL, NULL, 0) == 0);
 	assert(state_current(fsm) == T2);
 	assert(t1a_exit_visited == 1);
 	assert(t1a_enter_visited == 0);
@@ -70,7 +70,7 @@ main(int argc, char **argv)
 	assert(t2_entry_pre_visited == 1);
 
 	/* T2 -> T3 - expect success */
-	assert(state_advance(fsm, T3, NULL, 0) == 0);
+	assert(state_advance(fsm, T3, NULL, NULL, 0) == 0);
 	assert(t2_exit_visited == 1);
 	assert(t2_enter_visited == 1);
 	assert(t2_exit_pre_visited == 1);
@@ -82,7 +82,7 @@ main(int argc, char **argv)
 	assert(state_current(fsm) == T3);
 
 	/* T3 -> T2 - expect success */
-	assert(state_advance(fsm, T2, NULL, 0) == 0);
+	assert(state_advance(fsm, T2, NULL, NULL, 0) == 0);
 	assert(state_current(fsm) == T2);
 	assert(t2_exit_visited == 1);
 	assert(t2_enter_visited == 2);
@@ -94,7 +94,7 @@ main(int argc, char **argv)
 	assert(t3_entry_pre_visited == 1);
 
 	/* T2 -> T4 - expect failure */
-	assert(state_advance(fsm, T4, NULL, 0) == -1);
+	assert(state_advance(fsm, T4, NULL, NULL, 0) == -1);
 	assert(t2_exit_visited == 1);
 	assert(t2_enter_visited == 2);
 	assert(t2_exit_pre_visited == 1);
@@ -102,7 +102,7 @@ main(int argc, char **argv)
 	assert(state_current(fsm) == T2);
 
 	/* T2 -> T3 - expect success */
-	assert(state_advance(fsm, T3, NULL, 0) == 0);
+	assert(state_advance(fsm, T3, NULL, NULL, 0) == 0);
 	assert(state_current(fsm) == T3);
 	assert(t2_exit_visited == 2);
 	assert(t2_enter_visited == 2);
@@ -114,7 +114,7 @@ main(int argc, char **argv)
 	assert(t3_entry_pre_visited == 2);
 
 	/* T3 -> T4 - expect failure */
-	assert(state_advance(fsm, T4, NULL, 0) == -1);
+	assert(state_advance(fsm, T4, NULL, NULL, 0) == -1);
 	assert(state_current(fsm) == T3);
 	assert(t3_exit_visited == 1);
 	assert(t3_enter_visited == 2);
@@ -126,7 +126,7 @@ main(int argc, char **argv)
 	assert(t4_entry_pre_visited == 1);
 
 	/* T3 -> T3 - expect success */
-	assert(state_advance(fsm, T3, NULL, 0) == 0);
+	assert(state_advance(fsm, T3, NULL, NULL, 0) == 0);
 	assert(state_current(fsm) == T3);
 	assert(t3_exit_visited == 2);
 	assert(t3_enter_visited == 3);

@@ -91,8 +91,6 @@ def main():
 		'current-state-function'	: [ None, 2 ],
 		'state-enum-to-string-function'	: [ None, 2 ],
 		'event-enum-to-string-function'	: [ None, 2 ],
-		'set-transition-ctx-function'	: [ None, 2 ],
-		'set-precondition-ctx-function'	: [ None, 2 ],
 		'source-banner'			: [ None, 1 ],
 		'precondition-function-args'	: [ None, 2 ],
 		'transition-function-args'	: [ None, 2 ],
@@ -183,10 +181,6 @@ def main():
 				fsm.state_enum_to_string_func = terms[1]
 			elif terms[0] == 'event-enum-to-string-function':
 				fsm.event_enum_to_string_func = terms[1]
-			elif terms[0] == 'set-transition-ctx-function':
-				fsm.trans_ctx_set_func = terms[1]
-			elif terms[0] == 'set-precondition-ctx-function':
-				fsm.precond_ctx_set_func = terms[1]
 			elif terms[0] == 'source-banner':
 				source_banner = ""
 				for l in input_file:
@@ -321,8 +315,6 @@ class FSM:
 		self.state_enum_to_string_func = "state_ntop"
 		self.event_enum_to_string_func = "event_ntop"
 		self.current_state_func = "state_current"
-		self.trans_ctx_set_func = "state_set_transition_cb_ctx"
-		self.precond_ctx_set_func = "state_set_precondition_cb_ctx"
 		self.source_banner = None
 		self.precond_arg_event = True
 		self.precond_arg_curr = True
@@ -438,18 +430,12 @@ class FSM:
 		else:
 			init_func_proto_comments = _INIT_FUNC_SINGLE
 
-		trans_ctx_proto = ""
-		if self.trans_arg_ctx:
-			trans_ctx_proto = _TRANS_SET_CTX_PROTO_COMMENTS % {
-			    "struct_name" : self.struct_name,
-			    "trans_set_ctx_func" : self.trans_ctx_set_func,
-			}
-		precond_ctx_proto = ""
-		if self.precond_arg_ctx:
-			precond_ctx_proto = _PRECOND_SET_CTX_PROTO_COMMENTS % {
-			    "struct_name" : self.struct_name,
-			    "precond_set_ctx_func" : self.precond_ctx_set_func,
-			}
+		advance_ctx_arg = ""
+		advance_ctx_comment = ""
+		if self.precond_arg_ctx or self.trans_arg_ctx or \
+		   (len(self.events) != 0 and self.ev_callback_arg_ctx):
+			advance_ctx_arg = _ADVANCE_FUNC_CTX_ARG
+			advance_ctx_comment = _ADVANCE_FUNC_CTX_COMMENT
 
  		init_func_proto_comments %= {
 			    "struct_name" : self.struct_name,
@@ -480,6 +466,10 @@ class FSM:
 		    "state_enum" : self.state_enum,
 		    "event_enum" : self.event_enum,
 		    "struct_name" : self.struct_name,
+		    "ctx" : advance_ctx_arg,
+		}
+		advance_func_comment %= {
+		    "ctx" : advance_ctx_comment,
 		}
 
 		print >> h, _C_HEADER % {
@@ -499,8 +489,6 @@ class FSM:
 		    "free_func" : self.free_func,
 		    "advance_func" : self.advance_func,
 		    "current_state_func" : self.current_state_func,
-		    "trans_ctx_proto" : trans_ctx_proto,
-		    "precond_ctx_proto" : precond_ctx_proto,
 		    "state_enum_to_string_func" :
 		        self.state_enum_to_string_func,
 		}
@@ -832,28 +820,10 @@ class FSM:
 		if self.source_banner is not None:
 			banner = self.source_banner + "\n"
 
-		trans_ctx_struct = ""
-		trans_ctx_init = ""
-		trans_ctx_set = ""
-		if self.trans_arg_ctx or \
+		advance_ctx_arg = ""
+		if self.precond_arg_ctx or self.trans_arg_ctx or \
 		   (len(self.events) != 0 and self.ev_callback_arg_ctx):
-			trans_ctx_struct = _TRANS_CTX_STRUCT
-			trans_ctx_init = _TRANS_CTX_INIT
-			trans_ctx_set = _TRANS_CTX_SET % {
-			    "trans_set_ctx_func" : self.trans_ctx_set_func,
-			    "struct_name" : self.struct_name,
-			}
-		precond_ctx_struct = ""
-		precond_ctx_init = ""
-		precond_ctx_set = ""
-		if self.precond_arg_ctx or \
-		   (len(self.events) != 0 and self.ev_precond_arg_ctx):
-			precond_ctx_struct = _PRECOND_CTX_STRUCT
-			precond_ctx_init = _PRECOND_CTX_INIT
-			precond_ctx_set = _PRECOND_CTX_SET % {
-			    "precond_set_ctx_func" : self.precond_ctx_set_func,
-			    "struct_name" : self.struct_name,
-			}
+			advance_ctx_arg = _ADVANCE_FUNC_CTX_ARG
 
 		state_func_prototypes = self._build_state_func_prototypes()
 		event_func_prototypes = self._build_event_func_prototypes()
@@ -926,6 +896,7 @@ class FSM:
 		    "state_enum" : self.state_enum,
 		    "event_enum" : self.event_enum,
 		    "struct_name" : self.struct_name,
+		    "ctx" : advance_ctx_arg,
 		}
 
 		init_func_def %= {
@@ -936,8 +907,6 @@ class FSM:
 		    "init_state_cases" : init_state_cases,
 		    "state_enum_to_string_func" :
 		        self.state_enum_to_string_func,
-		    "trans_init" : trans_ctx_init,
-		    "precond_init" : precond_ctx_init,
 		}
 
 		print >> h, _C_SOURCE % {
@@ -970,10 +939,6 @@ class FSM:
 		    "event_preconds" : event_preconds,
 		    "event_callbacks" : event_callbacks,
 		    "error_handlers" : error_handlers,
-		    "trans_struct" : trans_ctx_struct,
-		    "precond_struct" : precond_ctx_struct,
-		    "trans_set" : trans_ctx_set,
-		    "precond_set" : precond_ctx_set,
 		    "advance_func_proto" : advance_func_proto,
 		}
 
@@ -1112,20 +1077,19 @@ struct %(struct_name)s *%(init_func)s(char *errbuf, size_t errlen);"""
 
 _ADVANCE_FUNC_COMMENT_STATE_BASED = \
 """/*
- * Attempt to advance to the state specified by "new_state". Will return
- * 0 on success, -1 on failure. If "errbuf" is not NULL, upto "errlen"
- * bytes of error message will be copied into "errbuf" on failure.
+ * Attempt to advance to the state specified by "new_state".%(ctx)s
+ * Will return 0 on success, -1 on failure. If "errbuf" is not NULL,
+ * upto "errlen" bytes of error message will be copied into "errbuf" on
+ * failure.
  */"""
 
 _ADVANCE_FUNC_PROTO_STATE_BASED = """
 int %(advance_func)s(struct %(struct_name)s *fsm, enum %(state_enum)s new_state,
-    char *errbuf, size_t errlen)"""
-
-# -------------------------------------------------------------------------
+    %(ctx)schar *errbuf, size_t errlen)"""
 
 _ADVANCE_FUNC_COMMENT_EVENT_BASED = \
 """/*
- * Execute a pre-defined event on the FSM that may trigger a transition.
+ * Execute a pre-defined event on the FSM that may trigger a transition.%(ctx)s
  * Will return 0 on success or -1 on failure. If "errbuf" is not NULL,
  * upto "errlen" bytes of error message will be copied into "errbuf" on
  * failure.
@@ -1133,7 +1097,13 @@ _ADVANCE_FUNC_COMMENT_EVENT_BASED = \
 
 _ADVANCE_FUNC_PROTO_EVENT_BASED = """
 int %(advance_func)s(struct %(struct_name)s *fsm, enum %(event_enum)s ev,
-    char *errbuf, size_t errlen)"""
+    %(ctx)schar *errbuf, size_t errlen)"""
+
+_ADVANCE_FUNC_CTX_ARG = """void *ctx, """
+_ADVANCE_FUNC_CTX_COMMENT = """
+ * The "ctx" argument is a caller-specific context pointer that may be
+ * used to pass additional state to precondition, event and transition
+ * callback functions."""
 
 # -------------------------------------------------------------------------
 
@@ -1182,7 +1152,6 @@ enum %(state_enum)s {
 struct %(struct_name)s;
 
 %(init_func_proto_comments)s
-%(trans_ctx_proto)s%(precond_ctx_proto)s
 /*
  * Free a FSM created with %(init_func)s()
  */
@@ -1241,21 +1210,6 @@ _PRECOND_FUNC_PROTO_CTX = "void *"
 _PRECOND_FUNC_PROTO_NOARGS = "void"
 _PRECOND_FUNC_PROTO_END = ");\n"
 
-_TRANS_SET_CTX_PROTO_COMMENTS = \
-"""
-/*
- * Set the transition callback context to "ctx"
- */
-void %(trans_set_ctx_func)s(struct %(struct_name)s *fsm, void *ctx);
-"""
-_PRECOND_SET_CTX_PROTO_COMMENTS = \
-"""
-/*
- * Set the transition precondition callback context to "ctx"
- */
-void %(precond_set_ctx_func)s(struct %(struct_name)s *fsm, void *ctx);
-"""
-
 # -------------------------------------------------------------------------
 
 _STATE_INIT_FUNC_MULTI = \
@@ -1281,7 +1235,7 @@ _STATE_INIT_FUNC_MULTI = \
 			snprintf(errbuf, errlen, "Memory allocation failed");
 		return NULL;
 	}
-	ret->current_state = initial_state;%(trans_init)s%(precond_init)s
+	ret->current_state = initial_state;
 	return ret;
 }"""
 
@@ -1298,7 +1252,7 @@ _STATE_INIT_FUNC_SINGLE = \
 			snprintf(errbuf, errlen, "Memory allocation failed");
 		return NULL;
 	}
-	ret->current_state = %(initial_state)s;%(trans_init)s%(precond_init)s
+	ret->current_state = %(initial_state)s;
 	return ret;
 }"""
 
@@ -1341,37 +1295,16 @@ _EVENT_CALL_SWITCH_FINISH = \
 _PRECOND_FUNC_CALLSIG_EVENT = "ev"
 _PRECOND_FUNC_CALLSIG_CURRENT = "fsm->current_state"
 _PRECOND_FUNC_CALLSIG_NEW = "new_state"
-_PRECOND_FUNC_CALLSIG_CTX = "fsm->precond_ctx"
+_PRECOND_FUNC_CALLSIG_CTX = "ctx"
 _PRECOND_FUNC_CALLSIG_START = "\t\tif (%(func)s("
 _PRECOND_FUNC_CALLSIG_END = ") != 0)\n\t\t\tgoto %(which)s_precond_fail;\n"
 _TRANS_FUNC_CALLSIG_EVENT = "ev"
 _TRANS_FUNC_CALLSIG_CURRENT = "fsm->current_state"
 _TRANS_FUNC_CALLSIG_OLD = "old_state"
 _TRANS_FUNC_CALLSIG_NEW = "new_state"
-_TRANS_FUNC_CALLSIG_CTX = "fsm->trans_ctx"
+_TRANS_FUNC_CALLSIG_CTX = "ctx"
 _TRANS_FUNC_CALLSIG_START = "\t\t%(func)s("
 _TRANS_FUNC_CALLSIG_END = ");\n"
-
-# -------------------------------------------------------------------------
-
-_TRANS_CTX_STRUCT = "\n\tvoid *trans_ctx;"
-_PRECOND_CTX_STRUCT = "\n\tvoid *precond_ctx;"
-_TRANS_CTX_INIT = "\n\tret->trans_ctx = NULL;"
-_PRECOND_CTX_INIT = "\n\tret->precond_ctx = NULL;"
-_TRANS_CTX_SET = \
-"""void
-%(trans_set_ctx_func)s(struct %(struct_name)s *fsm, void *ctx)
-{
-	fsm->trans_ctx = ctx;
-}
-"""
-_PRECOND_CTX_SET = \
-"""void
-%(precond_set_ctx_func)s(struct %(struct_name)s *fsm, void *ctx)
-{
-	fsm->precond_ctx = ctx;
-}
-"""
 
 # -------------------------------------------------------------------------
 
@@ -1492,7 +1425,7 @@ _C_SOURCE="""%(banner)s%(self_promotion)s
 
 /* Private view of opaque FSM structure */
 struct %(struct_name)s {
-	enum %(state_enum)s current_state;%(trans_struct)s%(precond_struct)s
+	enum %(state_enum)s current_state;
 };
 %(state_func_prototypes)s%(event_func_prototypes)s
 static int
@@ -1502,7 +1435,7 @@ _is_%(state_enum)s_valid(enum %(state_enum)s n)
 		return -1;
 	return 0;
 }
-%(trans_set)s%(precond_set)s
+
 const char *
 %(state_enum_to_string_func)s(enum %(state_enum)s n)
 {

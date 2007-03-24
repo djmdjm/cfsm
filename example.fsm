@@ -12,8 +12,6 @@ initialise-function myfsm_init
 free-function myfsm_free
 advance-function myfsm_advance
 state-enum-to-string-function myfsm_tostring
-set-transition-ctx-function myfsm_set_transition_ctx
-set-precondition-ctx-function myfsm_set_precondition_ctx
 
 # Specify what arguments we want to pass to the transition preconditions
 # and callbacks
