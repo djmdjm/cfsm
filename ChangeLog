@@ -1,3 +1,6 @@
+20070324
+ - (djm) Implement event-driven FSMs
+
 20070311
  - (djm) Parametise location of cfsm program for regression tests
  - (djm) Some cleanup ahead of parser extension: make a fsm.new_state

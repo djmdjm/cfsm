@@ -10,7 +10,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include "t0_fsm.h"
+#include "t_ex0_fsm.h"
 
 enum mystate ie_expected_cb_state = INITIAL_1;
 enum mystate rtep_expected_cb_state = GROUND_STATE;

@@ -1,8 +1,13 @@
 optionally generate callback stubs into a separate file too
 
-label the transitions an allow state advance by these labels
+explicitly numbered events / states
+
+ignored events
 
 per-transtion function calls/preconditions
+
+oneshot events
+oneshot states
 
 implement transition checks as a packed (bit vector) adjacency matrix
 rather than a rat's nest of switch() statements

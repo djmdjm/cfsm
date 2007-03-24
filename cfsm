@@ -76,19 +76,28 @@ def main():
 		'exit-precondition'		: [ 'state', 2 ],
 		'onexit-func'			: [ 'state', 2 ],
 		'initial-state'			: [ 'state', 1 ],
+		'on-event'			: [ 'state', 4 ],
+		'event-precondition'		: [ 'event', 2 ],
+		'event-callback'			: [ 'event', 2 ],
+		'event'				: [ None, 2 ],
 		'fsm-struct-type'		: [ None, 2 ],
 		'state-enum-type'		: [ None, 2 ],
+		'event-enum-type'		: [ None, 2 ],
 		'advance-function'		: [ None, 2 ],
+		'event-function'		: [ None, 2 ],
 		'free-function'			: [ None, 2 ],
 		'initialise-function'		: [ None, 2 ],
 		'initialize-function'		: [ None, 2 ],
 		'current-state-function'	: [ None, 2 ],
-		'enum-to-string-function'	: [ None, 2 ],
+		'state-enum-to-string-function'	: [ None, 2 ],
+		'event-enum-to-string-function'	: [ None, 2 ],
 		'set-transition-ctx-function'	: [ None, 2 ],
 		'set-precondition-ctx-function'	: [ None, 2 ],
 		'source-banner'			: [ None, 1 ],
 		'precondition-function-args'	: [ None, 2 ],
 		'transition-function-args'	: [ None, 2 ],
+		'event-callback-args'		: [ None, 2 ],
+		'event-precondition-args'	: [ None, 2 ],
 	}
 
 	lnum = 0
@@ -129,15 +138,26 @@ def main():
 
 		try:
 			if terms[0] == 'state':
-				state = fsm.new_state(terms[1])
+				state = fsm.get_state(terms[1])
+				event = None
+			elif terms[0] == 'event':
+				event = fsm.get_event(terms[1])
+				state = None
+			elif terms[0] == 'on-event':
+				if terms[2] != "->":
+					raise ValueError, "Invalid syntax"
+				event = fsm.get_event(terms[1])
+				fsm.add_transition(state.name, terms[3], event)
 			elif terms[0] == 'next-state':
-				state.add_next_state(terms[1])
-				# XXX support:
-				# next-state FOO transition_func
+				fsm.add_transition(state.name, terms[1])
 			elif terms[0] == 'entry-precondition':
 				state.add_pre_entry_func(terms[1])
 			elif terms[0] == 'onentry-func':
 				state.add_post_entry_func(terms[1])
+			elif terms[0] == 'event-precondition':
+				event.add_pre_entry_func(terms[1])
+			elif terms[0] == 'event-callback':
+				event.add_post_entry_func(terms[1])
 			elif terms[0] == 'exit-precondition':
 				state.add_pre_exit_func(terms[1])
 			elif terms[0] == 'onexit-func':
@@ -147,7 +167,9 @@ def main():
 			elif terms[0] == 'fsm-struct-type':
 				fsm.struct_name = terms[1]
 			elif terms[0] == 'state-enum-type':
-				fsm.enum_name = terms[1]
+				fsm.state_enum = terms[1]
+			elif terms[0] == 'event-enum-type':
+				fsm.event_enum = terms[1]
 			elif terms[0] == 'initialise-function' or \
 			     terms[0] == 'initialize-function':
 				fsm.init_func = terms[1]
@@ -157,8 +179,10 @@ def main():
 				fsm.advance_func = terms[1]
 			elif terms[0] == 'current-state-function':
 				fsm.current_state_func = terms[1]
-			elif terms[0] == 'enum-to-string-function':
-				fsm.enum_to_string_func = terms[1]
+			elif terms[0] == 'state-enum-to-string-function':
+				fsm.state_enum_to_string_func = terms[1]
+			elif terms[0] == 'event-enum-to-string-function':
+				fsm.event_enum_to_string_func = terms[1]
 			elif terms[0] == 'set-transition-ctx-function':
 				fsm.trans_ctx_set_func = terms[1]
 			elif terms[0] == 'set-precondition-ctx-function':
@@ -175,15 +199,18 @@ def main():
 					   "EOF looking for end-source-banner"
 				fsm.source_banner = source_banner
 			elif terms[0] == 'precondition-function-args':
-				fsm.precond_arg_current = False
+				fsm.precond_arg_event = False
+				fsm.precond_arg_curr = False
 				fsm.precond_arg_new = False
 				fsm.precond_arg_ctx = False
 				for arg in terms[1].split(','):
 					arg = arg.strip()
 					if arg == 'none':
 						pass
+					elif arg == 'event':
+						fsm.precond_arg_event = True
 					elif arg == 'old-state':
-						fsm.precond_arg_current = True
+						fsm.precond_arg_curr = True
 					elif arg == 'new-state':
 						fsm.precond_arg_new = True
 					elif arg == 'ctx':
@@ -193,15 +220,18 @@ def main():
 						    "Invalid %s argument %s" % \
 						    (terms[0], terms[1])
 			elif terms[0] == 'transition-function-args':
-				fsm.trans_arg_current = False
+				fsm.trans_arg_event = False
+				fsm.trans_arg_curr = False
 				fsm.trans_arg_new = False
 				fsm.trans_arg_ctx = False
 				for arg in terms[1].split(','):
 					arg = arg.strip()
 					if arg == 'none':
 						pass
+					elif arg == 'event':
+						fsm.trans_arg_event = True
 					elif arg == 'old-state':
-						fsm.trans_arg_current = True
+						fsm.trans_arg_curr = True
 					elif arg == 'new-state':
 						fsm.trans_arg_new = True
 					elif arg == 'ctx':
@@ -210,6 +240,52 @@ def main():
 						raise ValueError, \
 						    "Invalid %s argument %s" % \
 						    (terms[0], terms[1])
+			elif terms[0] == 'event-precondition-args':
+				fsm.ev_precond_arg_event = False
+				fsm.ev_precond_arg_curr = False
+				fsm.ev_precond_arg_new = False
+				fsm.ev_precond_arg_ctx = False
+				for arg in terms[1].split(','):
+					arg = arg.strip()
+					if arg == 'none':
+						pass
+					elif arg == 'event':
+						fsm.ev_precond_arg_event = True
+					elif arg == 'old-state':
+						fsm.ev_precond_arg_curr = True
+					elif arg == 'new-state':
+						fsm.ev_precond_arg_new = True
+					elif arg == 'ctx':
+						fsm.ev_precond_arg_ctx = True
+					else:
+						raise ValueError, \
+						    "Invalid %s argument %s" % \
+						    (terms[0], terms[1])
+			elif terms[0] == 'event-callback-args':
+				fsm.ev_callback_arg_event = False
+				fsm.ev_callback_arg_curr = False
+				fsm.ev_callback_arg_new = False
+				fsm.ev_callback_arg_ctx = False
+				for arg in terms[1].split(','):
+					arg = arg.strip()
+					if arg == 'none':
+						pass
+					elif arg == 'event':
+						fsm.ev_callback_arg_event = True
+					elif arg == 'old-state':
+						fsm.ev_callback_arg_curr = True
+					elif arg == 'new-state':
+						fsm.ev_callback_arg_new = True
+					elif arg == 'ctx':
+						fsm.ev_callback_arg_ctx = True
+					else:
+						raise ValueError, \
+						    "Invalid %s argument %s" % \
+						    (terms[0], terms[1])
+
+			else:
+				raise ValueError, \
+				    "unsupported keyworks \"%s\"" % terms[0]
 
 		except ValueError, e:
 				print >> sys.stderr, "line %d:" % lnum, e
@@ -217,6 +293,7 @@ def main():
 
 	try:
 		fsm.finalise()
+				
 	except ValueError, e:
 		print >> sys.stderr, e
 		sys.exit(1)
@@ -232,33 +309,100 @@ class FSM:
 	def __init__(self):
 		self.state_list = []
 		self.states = {}
-		self.enum_name = "state"
+		self.event_list = []
+		self.events = {}
+		self.transitions = {}
+		self.state_enum = "state"
+		self.event_enum = "state_events"
 		self.struct_name = "fsm"
 		self.free_func = "state_free"
 		self.init_func = "state_init"
 		self.advance_func = "state_advance"
-		self.enum_to_string_func = "state_ntop"
+		self.state_enum_to_string_func = "state_ntop"
+		self.event_enum_to_string_func = "event_ntop"
 		self.current_state_func = "state_current"
 		self.trans_ctx_set_func = "state_set_transition_cb_ctx"
 		self.precond_ctx_set_func = "state_set_precondition_cb_ctx"
 		self.source_banner = None
-		self.precond_arg_current = True
+		self.precond_arg_event = True
+		self.precond_arg_curr = True
 		self.precond_arg_new = True
 		self.precond_arg_ctx = True
-		self.trans_arg_current = True
+		self.trans_arg_event = True
+		self.trans_arg_curr = True
 		self.trans_arg_new = True
 		self.trans_arg_ctx = True
+		self.ev_callback_arg_event = True
+		self.ev_callback_arg_curr = True
+		self.ev_callback_arg_new = True
+		self.ev_callback_arg_ctx = True
+		self.ev_precond_arg_event = True
+		self.ev_precond_arg_curr = True
+		self.ev_precond_arg_new = True
+		self.ev_precond_arg_ctx = True
 
-	def new_state(self, name):
+	def get_state(self, name):
 		if name in self.states:
-			raise ValueError, "State %s already added" % name
+			return self.states[name]
 		state = State(name)
 		self.state_list.append(state)
 		self.states[state.name] = state
 		return state
 
+	def get_event(self, name):
+		if name in self.events:
+			return self.events[name]
+		event = Event(name)
+		self.event_list.append(event)
+		self.events[event.name] = event
+		return event
+
+	def add_transition(self, from_, to_, event = None):
+		if event:
+			event.add_next_state(from_, to_)
+		self.states[from_].add_next_state(to_)
+		tkey = from_ + " -> " + to_
+		if tkey in self.transitions:
+			if event is not None and \
+			   self.transitions[tkey] is not None and \
+			   self.transitions[tkey].name != event.name:
+				raise ValueError, "different events (" + \
+				    self.transitions[tkey].name + ", " + \
+				    event.name + ") lead to the same " + \
+				    "transition: " + tkey
+		else:
+			self.transitions[tkey] = event
+
 	def finalise(self):
-		indegrees = dict([ (s, 0) for s in self.states])
+		reachable = set()
+		for state in self.states.itervalues():
+			if state.initial:
+				continue
+			reachable.add(state.name)
+		# XXX check next-state vs event
+		for event in self.events.itervalues():
+			if len(event.next_states) == 0:
+				raise ValueError, "Event " + event + \
+					" triggers no transitions"
+			for from_ in event.next_states:
+				if not from_ in self.states:
+					raise ValueError, "Event " + \
+					    event.name + " refers to " + \
+					    "nonexistent current state" + \
+					    from_
+				to_ = event.next_states[from_]
+				reachable.discard(to_)
+				if not from_ in self.states:
+					raise ValueError, \
+					    "Event " + event.name + \
+					    " refers to nonexistent next " + \
+					    "state" + to_
+				self.add_transition(from_, to_, event)
+
+		if len(self.events) != 0 and len(reachable) != 0:
+			raise ValueError, "Some states unreachable via " + \
+			    "events: " + ", ".join(reachable)
+		indegrees = dict([(s, 0) for s in self.states])
 		for state in self.states:
 			for arc in self.states[state].next_states:
 				if not arc in self.states:
@@ -280,8 +424,14 @@ class FSM:
 		enum_contents = ""
 		i = 0
 		for state in self.state_list:
-			enum_contents += "	%s = %u,\n" % (state.name, i)
+			enum_contents += "\t%s = %u,\n" % (state.name, i)
 			i += 1
+		event_enum_contents = ""
+		i = 0
+		for event in self.event_list:
+			event_enum_contents += "\t%s = %u,\n" % (event.name, i)
+			i += 1
+
 		init_states = [s.name for s in self.state_list if s.initial]
 		if len(init_states) > 1:
 			init_func_proto_comments = _INIT_FUNC_MULTI
@@ -304,25 +454,55 @@ class FSM:
  		init_func_proto_comments %= {
 			    "struct_name" : self.struct_name,
 			    "init_func" : self.init_func,
-			    "enum_name" : self.enum_name,
+			    "state_enum" : self.state_enum,
 			    "init_state" : init_states[0],
 			}
-		
+
+		advance_func_comment = _ADVANCE_FUNC_COMMENT_STATE_BASED 
+		advance_func_proto = _ADVANCE_FUNC_PROTO_STATE_BASED
+		event_enum_decl = ""
+		event_funcs_decl = ""
+		if len(self.events):
+			advance_func_comment = _ADVANCE_FUNC_COMMENT_EVENT_BASED 
+			advance_func_proto = _ADVANCE_FUNC_PROTO_EVENT_BASED
+			event_enum_decl = _EVENT_ENUM_DECL % {
+			    "event_enum_contents" : event_enum_contents,
+			    "event_enum" : self.event_enum,
+			}
+			event_funcs_decl = _EVENT_FUNCS_DECL % {
+			    "event_enum" : self.event_enum,
+			    "struct_name" : self.struct_name,
+			    "event_enum_to_string_func" :
+			        self.event_enum_to_string_func,
+			}
+		advance_func_proto %= {
+		    "advance_func" : self.advance_func,
+		    "state_enum" : self.state_enum,
+		    "event_enum" : self.event_enum,
+		    "struct_name" : self.struct_name,
+		}
+
 		print >> h, _C_HEADER % {
 		    "init_func_proto_comments" : init_func_proto_comments,
 		    "enum_contents" : enum_contents,
+		    "event_enum_optional" : event_enum_decl,
+		    "event_funcs_optional" : event_funcs_decl,
+		    "advance_func_comment" : advance_func_comment,
+		    "advance_func_proto" : advance_func_proto,
 		    "self_promotion" : _SELF_PROMOTION,
 		    "banner" : banner,
 		    "guard" : guard,
 		    "struct_name" : self.struct_name,
-		    "enum_name" : self.enum_name,
+		    "state_enum" : self.state_enum,
+		    "event_enum" : self.event_enum,
 		    "init_func" : self.init_func,
 		    "free_func" : self.free_func,
 		    "advance_func" : self.advance_func,
-		    "enum_to_string_func" : self.enum_to_string_func,
 		    "current_state_func" : self.current_state_func,
 		    "trans_ctx_proto" : trans_ctx_proto,
 		    "precond_ctx_proto" : precond_ctx_proto,
+		    "state_enum_to_string_func" :
+		        self.state_enum_to_string_func,
 		}
 
 	def _build_state_func_prototypes(self):
@@ -339,7 +519,9 @@ class FSM:
 				actions[func] = True
 
 		proto = []
-		if self.trans_arg_current:
+		if self.trans_arg_event and len(self.event_list) > 0:
+			proto.append(_TRANS_FUNC_PROTO_EVENT)
+		if self.trans_arg_curr:
 			proto.append(_TRANS_FUNC_PROTO_CURRENT)
 		if self.trans_arg_new:
 			proto.append(_TRANS_FUNC_PROTO_NEW)
@@ -352,7 +534,9 @@ class FSM:
 		trans_prototype += _TRANS_FUNC_PROTO_END
 
 		proto = []
-		if self.precond_arg_current:
+		if self.precond_arg_event and len(self.event_list) > 0:
+			proto.append(_PRECOND_FUNC_PROTO_EVENT)
+		if self.precond_arg_curr:
 			proto.append(_PRECOND_FUNC_PROTO_CURRENT)
 		if self.precond_arg_new:
 			proto.append(_PRECOND_FUNC_PROTO_NEW)
@@ -366,27 +550,33 @@ class FSM:
 
 		ret = ""
 		if len(actions) > 0:
-			ret += _TRANS_FUNC_COMMENT
+			ret += _STATE_TRANS_FUNC_COMMENT
 		for func in actions:
 			ret += trans_prototype % {
 			    "func" : func,
-			    "enum_name" : self.enum_name
+			    "state_enum" : self.state_enum,
+			    "event_enum" : self.event_enum,
 			}
 
 		if len(preconds) > 0:
-			ret += _PRECOND_FUNC_COMMENT
+			ret += _STATE_PRECOND_FUNC_COMMENT
 		for func in preconds:
 			ret += precond_prototype % {
 			    "func" : func,
-			    "enum_name" : self.enum_name
+			    "state_enum" : self.state_enum,
+			    "event_enum" : self.event_enum,
 			}
 		return ret
 
-	def _build_transition_checks(self):
+	def _build_state_transition_checks(self):
+		# XXX move this boilerplate code to template strings
 		# XXX this might be better done using an adjacency matrix
 		#     (perhaps packed into a bit vector for space)
 		# Output transition validity checking
-		ret = ""
+		ret = \
+"""	/* Transition checks */
+	switch (fsm->current_state) {
+"""
 		for state in self.state_list:
 			ret += "	case %s:\n" % state.name
 			if len(state.next_states) == 0:
@@ -402,9 +592,41 @@ class FSM:
 		}
 		break;
 """
+		ret += "	}"
 		return ret
 
-	def _build_state_calls(self, what, which, attr, critical):
+	def _build_event_transition_checks(self):
+		# XXX move this boilerplate code to template strings
+		# XXX this might be better done using an adjacency matrix
+		#     (perhaps packed into a bit vector for space)
+		# Output transition validity checking
+		ret = \
+"""	/* Determine next state */
+	switch (fsm->current_state) {
+"""
+		for state in self.state_list:
+			ret += "	case %s:\n" % state.name
+			valid_events = [event for event in self.event_list
+			    if state.name in event.next_states]
+			if len(valid_events) == 0:
+				ret += "		goto bad_event;\n"
+				continue
+			ret += "		switch (ev) {\n"
+			for event in valid_events:
+				ret += "\t\tcase %s:\n" % event.name
+				ret += "\t\t\tnew_state = %s;\n" % \
+				    event.next_states[state.name]
+				ret += "\t\t\tbreak;\n"
+			ret += \
+"""		default:
+			goto bad_event;
+		}
+		break;
+"""
+		ret += "	}"
+		return ret
+
+	def _build_state_calls(self, what, which, attr, critical, use_old=False):
 		# Output state change precondition/entry/exit calls
 		# This could be folded into the transition checking switch,
 		# but the code would be IMHO less readable
@@ -416,8 +638,13 @@ class FSM:
 			raise ValueError, "bogus which \"%s\"" % which
 
 		callsig = []
-		if self.trans_arg_current:
-			callsig.append(_TRANS_FUNC_CALLSIG_CURRENT)
+		if self.trans_arg_event:
+			callsig.append(_TRANS_FUNC_CALLSIG_EVENT)
+		if self.trans_arg_curr:
+			if use_old:
+				callsig.append(_TRANS_FUNC_CALLSIG_OLD)
+			else:
+				callsig.append(_TRANS_FUNC_CALLSIG_CURRENT)
 		if self.trans_arg_new:
 			callsig.append(_TRANS_FUNC_CALLSIG_NEW)
 		if self.trans_arg_ctx:
@@ -427,7 +654,9 @@ class FSM:
 		trans_callsig += _TRANS_FUNC_CALLSIG_END
 
 		callsig = []
-		if self.precond_arg_current:
+		if self.precond_arg_event:
+			callsig.append(_PRECOND_FUNC_CALLSIG_EVENT)
+		if self.precond_arg_curr:
 			callsig.append(_PRECOND_FUNC_CALLSIG_CURRENT)
 		if self.precond_arg_new:
 			callsig.append(_PRECOND_FUNC_CALLSIG_NEW)
@@ -467,6 +696,137 @@ class FSM:
 			ret += _STATE_CALL_SWITCH_FINISH
 		return ret
 
+	def _build_event_calls(self, what, attr, critical):
+		callsig = []
+		if self.ev_callback_arg_event:
+			callsig.append(_TRANS_FUNC_CALLSIG_EVENT)
+		if self.ev_callback_arg_curr:
+			callsig.append(_TRANS_FUNC_CALLSIG_CURRENT)
+		if self.ev_callback_arg_new:
+			callsig.append(_TRANS_FUNC_CALLSIG_NEW)
+		if self.ev_callback_arg_ctx:
+			callsig.append(_TRANS_FUNC_CALLSIG_CTX)
+		trans_callsig = _TRANS_FUNC_CALLSIG_START
+		trans_callsig += ", ".join(callsig)
+		trans_callsig += _TRANS_FUNC_CALLSIG_END
+
+		callsig = []
+		if self.ev_precond_arg_event:
+			callsig.append(_PRECOND_FUNC_CALLSIG_EVENT)
+		if self.ev_precond_arg_curr:
+			callsig.append(_PRECOND_FUNC_CALLSIG_CURRENT)
+		if self.ev_precond_arg_new:
+			callsig.append(_PRECOND_FUNC_CALLSIG_NEW)
+		if self.ev_precond_arg_ctx:
+			callsig.append(_PRECOND_FUNC_CALLSIG_CTX)
+		precond_callsig = _PRECOND_FUNC_CALLSIG_START
+		precond_callsig += ", ".join(callsig)
+		precond_callsig += _PRECOND_FUNC_CALLSIG_END
+
+		switch_started = False
+		ret = ""
+		for event in self.event_list:
+			funcs = getattr(event, attr)
+			if len(funcs) == 0:
+				continue
+			if not switch_started:
+				ret += _EVENT_CALL_SWITCH_START % {
+				    "what" : what,
+				}
+				switch_started = True
+			ret += _EVENT_CALL_SWITCH_CASE % { 
+			    "event" : event.name
+			}
+			for func in funcs:
+				if critical:
+					frag = precond_callsig
+				else:
+					frag = trans_callsig
+				ret += frag % {
+				    "func" : func,
+				    "which" : "event",
+				}
+			ret += "		break;\n"
+		if switch_started:
+			ret += _EVENT_CALL_SWITCH_FINISH
+		return ret
+
+	def _build_event_func_prototypes(self):
+		actions = {}
+		preconds = {}
+		for event in self.event_list:
+			for func in event.pre_entry_funcs:
+				preconds[func] = True
+			for func in event.post_entry_funcs:
+				actions[func] = True
+
+		proto = []
+		if self.ev_callback_arg_event:
+			proto.append(_TRANS_FUNC_PROTO_EVENT)
+		if self.ev_callback_arg_curr:
+			proto.append(_TRANS_FUNC_PROTO_CURRENT)
+		if self.ev_callback_arg_new:
+			proto.append(_TRANS_FUNC_PROTO_NEW)
+		if self.ev_callback_arg_ctx:
+			proto.append(_TRANS_FUNC_PROTO_CTX)
+		if len(proto) == 0:
+			proto.append(_TRANS_FUNC_PROTO_NOARGS)
+		trans_prototype = _TRANS_FUNC_PROTO_START
+		trans_prototype += ", ".join(proto)
+		trans_prototype += _TRANS_FUNC_PROTO_END
+
+		proto = []
+		if self.ev_precond_arg_event:
+			proto.append(_PRECOND_FUNC_PROTO_EVENT)
+		if self.ev_precond_arg_curr:
+			proto.append(_PRECOND_FUNC_PROTO_CURRENT)
+		if self.ev_precond_arg_new:
+			proto.append(_PRECOND_FUNC_PROTO_NEW)
+		if self.ev_precond_arg_ctx:
+			proto.append(_PRECOND_FUNC_PROTO_CTX)
+		if len(proto) == 0:
+			proto.append(_PRECOND_FUNC_PROTO_NOARGS)
+		precond_prototype = _PRECOND_FUNC_PROTO_START
+		precond_prototype += ", ".join(proto)
+		precond_prototype += _PRECOND_FUNC_PROTO_END
+
+		ret = ""
+		if len(actions) > 0:
+			ret += _EVENT_TRANS_FUNC_COMMENT
+		for func in actions:
+			ret += trans_prototype % {
+			    "func" : func,
+			    "state_enum" : self.state_enum,
+			    "event_enum" : self.event_enum,
+			}
+
+		if len(preconds) > 0:
+			ret += _EVENT_PRECOND_FUNC_COMMENT
+		for func in preconds:
+			ret += precond_prototype % {
+			    "func" : func,
+			    "state_enum" : self.state_enum,
+			    "event_enum" : self.event_enum,
+			}
+		return ret
+
+	def build_event_funcs(self):		
+		enum_contents = ""
+		for event in self.event_list:
+			enum_contents += "\t\t\"%s\",\n" % event.name
+
+		event_funcs = _EVENT_FUNCTIONS % {
+		    "min_event_valid" : self.event_list[0].name,
+		    "max_event_valid" : self.event_list[-1].name,
+		    "struct_name" : self.struct_name,
+		    "state_enum" : self.state_enum,
+		    "event_enum" : self.event_enum,
+		    "enum_contents" : enum_contents,
+		    "event_enum_to_string_func" :
+		        self.event_enum_to_string_func,
+		}
+		return event_funcs
+
 	def output_source(self, h, header_path):
 		banner = ""
 		if self.source_banner is not None:
@@ -475,7 +835,8 @@ class FSM:
 		trans_ctx_struct = ""
 		trans_ctx_init = ""
 		trans_ctx_set = ""
-		if self.trans_arg_ctx:
+		if self.trans_arg_ctx or \
+		   (len(self.events) != 0 and self.ev_callback_arg_ctx):
 			trans_ctx_struct = _TRANS_CTX_STRUCT
 			trans_ctx_init = _TRANS_CTX_INIT
 			trans_ctx_set = _TRANS_CTX_SET % {
@@ -485,7 +846,8 @@ class FSM:
 		precond_ctx_struct = ""
 		precond_ctx_init = ""
 		precond_ctx_set = ""
-		if self.precond_arg_ctx:
+		if self.precond_arg_ctx or \
+		   (len(self.events) != 0 and self.ev_precond_arg_ctx):
 			precond_ctx_struct = _PRECOND_CTX_STRUCT
 			precond_ctx_init = _PRECOND_CTX_INIT
 			precond_ctx_set = _PRECOND_CTX_SET % {
@@ -494,7 +856,7 @@ class FSM:
 			}
 
 		state_func_prototypes = self._build_state_func_prototypes()
-		transition_check = self._build_transition_checks()
+		event_func_prototypes = self._build_event_func_prototypes()
 		exit_preconds = self._build_state_calls("preconditions",
 		    "exit", "pre_exit_funcs", True)
 		entry_preconds = self._build_state_calls("preconditions",
@@ -502,17 +864,13 @@ class FSM:
 		exit_funcs = self._build_state_calls("transition functions",
 		    "exit", "post_exit_funcs", False)
 		entry_funcs = self._build_state_calls("transition functions",
-		    "entry", "post_entry_funcs", False)
+		    "entry", "post_entry_funcs", False, True)
 
-		error_handlers = ""
-		if entry_preconds != "":
-			error_handlers += _ENTRY_PRECOND_FAIL
-		if exit_preconds != "":
-			error_handlers += _EXIT_PRECOND_FAIL
-		error_handlers %= {
-		    "enum_to_string_func" : self.enum_to_string_func
-		}
-
+		event_preconds = self._build_event_calls("event preconditions",
+		    "pre_entry_funcs", True)
+		event_callbacks = self._build_event_calls("event callbacks",
+		    "post_entry_funcs", False)
+		
 		enum_contents = ""
 		for state in self.state_list:
 			enum_contents += "\t\t\"%s\",\n" % state.name
@@ -525,13 +883,59 @@ class FSM:
 		init_state_cases = \
 		    "\n".join(["\tcase %s:" % case for case in init_states])
 
+		new_state_check_optional = ""
+		event_check_optional = ""
+		event_funcs = ""
+		new_state_var = ""
+		
+		if len(self.events):
+			event_funcs = self.build_event_funcs()
+			advance_func_proto = _ADVANCE_FUNC_PROTO_EVENT_BASED
+			event_check_optional = _CHECK_EVENT % {
+			    "event_enum" : self.event_enum,
+			}
+			new_state_var = _NEW_STATE_VAR % {
+			    "state_enum" : self.state_enum,
+			}
+			transition_check = self._build_event_transition_checks()
+			error_handlers = _EVENT_INVALID_FOR_STATE
+		else:
+			advance_func_proto = _ADVANCE_FUNC_PROTO_STATE_BASED
+			new_state_check_optional = _CHECK_NEW_STATE % {
+			    "state_enum" : self.state_enum,
+			}
+			transition_check = self._build_state_transition_checks()
+			error_handlers = _BAD_TRANSITION
+
+		if entry_preconds != "":
+			error_handlers += _ENTRY_PRECOND_FAIL
+		if exit_preconds != "":
+			error_handlers += _EXIT_PRECOND_FAIL
+		if event_preconds != "":
+			error_handlers += _EVENT_PRECOND_FAIL
+		error_handlers %= {
+		    "state_enum_to_string_func" :
+		        self.state_enum_to_string_func,
+		    "event_enum_to_string_func" :
+		        self.event_enum_to_string_func,
+		}
+
+
+		advance_func_proto %= {
+		    "advance_func" : self.advance_func,
+		    "state_enum" : self.state_enum,
+		    "event_enum" : self.event_enum,
+		    "struct_name" : self.struct_name,
+		}
+
 		init_func_def %= {
 		    "init_func" : self.init_func,
-		    "enum_name" : self.enum_name,
+		    "state_enum" : self.state_enum,
 		    "struct_name" : self.struct_name,
 		    "initial_state" : init_states[0],
 		    "init_state_cases" : init_state_cases,
-		    "enum_to_string_func" : self.enum_to_string_func,
+		    "state_enum_to_string_func" :
+		        self.state_enum_to_string_func,
 		    "trans_init" : trans_ctx_init,
 		    "precond_init" : precond_ctx_init,
 		}
@@ -541,15 +945,21 @@ class FSM:
 		    "self_promotion" : _SELF_PROMOTION,
 		    "banner" : banner,
 		    "struct_name" : self.struct_name,
-		    "enum_name" : self.enum_name,
+		    "state_enum" : self.state_enum,
 		    "init_func" : self.init_func,
 		    "free_func" : self.free_func,
 		    "advance_func" : self.advance_func,
-		    "enum_to_string_func" : self.enum_to_string_func,
+		    "new_state_opt" : new_state_var,
+		    "event_functions_optional" : event_funcs,
+		    "event_check_optional" : event_check_optional,
+		    "new_state_check_optional" : new_state_check_optional,
+		    "state_enum_to_string_func" :
+		        self.state_enum_to_string_func,
 		    "current_state_func" : self.current_state_func,
 		    "state_func_prototypes" : state_func_prototypes,
-		    "min_valid" : self.state_list[0].name,
-		    "max_valid" : self.state_list[-1].name,
+		    "event_func_prototypes" : event_func_prototypes,
+		    "min_state_valid" : self.state_list[0].name,
+		    "max_state_valid" : self.state_list[-1].name,
 		    "enum_contents" : enum_contents,
 		    "init_func_def" : init_func_def,
 		    "transition_check" : transition_check,
@@ -557,11 +967,14 @@ class FSM:
 		    "exit_preconds" : exit_preconds,
 		    "exit_funcs" : exit_funcs,
 		    "entry_funcs" : entry_funcs,
+		    "event_preconds" : event_preconds,
+		    "event_callbacks" : event_callbacks,
 		    "error_handlers" : error_handlers,
 		    "trans_struct" : trans_ctx_struct,
 		    "precond_struct" : precond_ctx_struct,
 		    "trans_set" : trans_ctx_set,
 		    "precond_set" : precond_ctx_set,
+		    "advance_func_proto" : advance_func_proto,
 		}
 
 	def output_dot(self, h):
@@ -580,20 +993,41 @@ class FSM:
 				continue;
 			print >> h, state.name,
 		print >> h, ""
-		for state in self.state_list:
-			for arc in state.next_states:
-				print >> h, "	%s -> %s;" % (state.name, arc)
+		for arc in self.transitions:
+			label = ""
+			if self.transitions[arc] is not None:
+				label = ' [ label = "%s" ]' % \
+				    self.transitions[arc].name
+			print >> h, "	%s%s;" % (arc, label)
 		print >> h, "}"
+
+class OrderedSet:
+	"""Minimal, write-once ordered set"""
+	def __init__(self, iv=[]):
+		self.s = set(iv)
+		self.v = list(iv)
+	def add(self, a):
+		if not a in self.s:
+			self.s.add(a)
+			self.v.append(a)
+	def __getitem__(self, n):
+		return self.v.__getitem__(n)
+	def __iter__(self):
+		return self.v.__iter__()
+	def __len__(self):
+		return self.v.__len__()
+	def __repr__(self):
+		return self.__class__.__name__ + "(" + repr(self.v) + ")"
 
 class State:
 	def __init__(self, name):
 		self._name_check(name)
 		self.name = name
-		self.next_states = []
-		self.pre_entry_funcs = []
-		self.post_entry_funcs = []
-		self.pre_exit_funcs = []
-		self.post_exit_funcs = []
+		self.next_states = OrderedSet()
+		self.pre_entry_funcs = OrderedSet()
+		self.post_entry_funcs = OrderedSet()
+		self.pre_exit_funcs = OrderedSet()
+		self.post_exit_funcs = OrderedSet()
 		self.initial = False
 
 	def _name_check(self, name):
@@ -601,19 +1035,47 @@ class State:
 			raise ValueError, "Invalid name \"%s\"" % name
 	def add_next_state(self, name):
 		self._name_check(name)
-		self.next_states.append(name)
+		self.next_states.add(name)
 	def add_pre_entry_func(self, name):
 		self._name_check(name)
-		self.pre_entry_funcs.append(name)
+		self.pre_entry_funcs.add(name)
 	def add_post_entry_func(self, name):
 		self._name_check(name)
-		self.post_entry_funcs.append(name)
+		self.post_entry_funcs.add(name)
 	def add_pre_exit_func(self, name):
 		self._name_check(name)
-		self.pre_exit_funcs.append(name)
+		self.pre_exit_funcs.add(name)
 	def add_post_exit_func(self, name):
 		self._name_check(name)
-		self.post_exit_funcs.append(name)
+		self.post_exit_funcs.add(name)
+
+class Event:
+	def __init__(self, name):
+		self._name_check(name)
+		self.name = name
+		self.next_states = {}
+		self.pre_entry_funcs = OrderedSet()
+		self.post_entry_funcs = OrderedSet()
+		self.initial = False
+
+	def _name_check(self, name):
+		if re.match('^[A-Za-z_][A-Za-z0-9_]*$', name) is None:
+			raise ValueError, "Invalid name \"%s\"" % name
+	def add_next_state(self, current, next):
+		self._name_check(current)
+		self._name_check(next)
+		if current in self.next_states and \
+		   self.next_states[current] != next:
+			raise ValueError, \
+			    "transition from %s already set for event %s" % \
+			    (current, self.name)
+		self.next_states[current] = next
+	def add_pre_entry_func(self, name):
+		self._name_check(name)
+		self.pre_entry_funcs.add(name)
+	def add_post_entry_func(self, name):
+		self._name_check(name)
+		self.post_entry_funcs.add(name)
 
 # -------------------------------------------------------------------------
 # The following section contains the template strings and fragments that
@@ -633,7 +1095,7 @@ _INIT_FUNC_MULTI = """/*
  * NULL on failure. If "errbuf" is not NULL, upto "errlen" bytes of
  * error message will be copied into "errbuf" on failure.
  */
-struct %(struct_name)s *%(init_func)s(enum %(enum_name)s initial_state,
+struct %(struct_name)s *%(init_func)s(enum %(state_enum)s initial_state,
     char *errbuf, size_t errlen);"""
 
 # -------------------------------------------------------------------------
@@ -648,6 +1110,58 @@ struct %(struct_name)s *%(init_func)s(char *errbuf, size_t errlen);"""
 
 # -------------------------------------------------------------------------
 
+_ADVANCE_FUNC_COMMENT_STATE_BASED = \
+"""/*
+ * Attempt to advance to the state specified by "new_state". Will return
+ * 0 on success, -1 on failure. If "errbuf" is not NULL, upto "errlen"
+ * bytes of error message will be copied into "errbuf" on failure.
+ */"""
+
+_ADVANCE_FUNC_PROTO_STATE_BASED = """
+int %(advance_func)s(struct %(struct_name)s *fsm, enum %(state_enum)s new_state,
+    char *errbuf, size_t errlen)"""
+
+# -------------------------------------------------------------------------
+
+_ADVANCE_FUNC_COMMENT_EVENT_BASED = \
+"""/*
+ * Execute a pre-defined event on the FSM that may trigger a transition.
+ * Will return 0 on success or -1 on failure. If "errbuf" is not NULL,
+ * upto "errlen" bytes of error message will be copied into "errbuf" on
+ * failure.
+ */"""
+
+_ADVANCE_FUNC_PROTO_EVENT_BASED = """
+int %(advance_func)s(struct %(struct_name)s *fsm, enum %(event_enum)s ev,
+    char *errbuf, size_t errlen)"""
+
+# -------------------------------------------------------------------------
+
+_EVENT_ENUM_DECL = """
+/*
+ * Events that may cause state transitions in the FSM
+ */
+enum %(event_enum)s {
+%(event_enum_contents)s};
+"""
+
+_EVENT_FUNCS_DECL = """
+/*
+ * Convert from the %(event_enum)s enumeration to a string. Will return
+ * NULL if the event is not known.
+ */
+const char *%(event_enum_to_string_func)s(enum %(event_enum)s);
+
+/*
+ * "Safe" version of %(event_enum_to_string_func)s. Will return the string
+ * "[INVALID]" if the event is not known, so it can be used directly
+ * in printf() statements, etc.
+ */
+const char *%(event_enum_to_string_func)s_safe(enum %(event_enum)s);
+"""
+
+# -------------------------------------------------------------------------
+
 _C_HEADER="""%(banner)s%(self_promotion)s
 
 #ifndef %(guard)s
@@ -658,9 +1172,9 @@ _C_HEADER="""%(banner)s%(self_promotion)s
 /*
  * The valid states of the FSM
  */
-enum %(enum_name)s {
+enum %(state_enum)s {
 %(enum_contents)s};
-
+%(event_enum_optional)s
 /*
  * The FSM object itself. This is intentionally opaque - all access must be
  * through this API
@@ -674,55 +1188,55 @@ struct %(struct_name)s;
  */
 void %(free_func)s(struct %(struct_name)s *fsm);
 
+%(advance_func_comment)s%(advance_func_proto)s;
+%(event_funcs_optional)s
 /*
- * Attempt to advance to the state specified by "new_state". Will return
- * 0 on success, -1 on failure. If "errbuf" is not NULL, upto "errlen"
- * bytes of error message will be copied into "errbuf" on failure.
- */
-int %(advance_func)s(struct %(struct_name)s *fsm, enum %(enum_name)s new_state,
-    char *errbuf, size_t errlen);
-
-/*
- * Convert from the %(enum_name)s enumeration to a string. Will return
+ * Convert from the %(state_enum)s enumeration to a string. Will return
  * NULL if the state is not known.
  */
-const char *%(enum_to_string_func)s(enum %(enum_name)s);
+const char *%(state_enum_to_string_func)s(enum %(state_enum)s);
 
 /*
- * "Safe" version of %(enum_to_string_func)s. Will return the string
+ * "Safe" version of %(state_enum_to_string_func)s. Will return the string
  * "[INVALID]" if the state is not known, so it can be used directly
  * in printf() statements, etc.
  */
-const char *%(enum_to_string_func)s_safe(enum %(enum_name)s);
+const char *%(state_enum_to_string_func)s_safe(enum %(state_enum)s);
 
 /*
  * Returns the current state of the FSM.
  */
-enum %(enum_name)s %(current_state_func)s(struct %(struct_name)s *fsm);
+enum %(state_enum)s %(current_state_func)s(struct %(struct_name)s *fsm);
 
 #endif /* %(guard)s */
 """
 
 # -------------------------------------------------------------------------
 
-_TRANS_FUNC_COMMENT = \
+_STATE_TRANS_FUNC_COMMENT = """
+/* Prototypes for state transition functions */
 """
-/* Prototypes for transition functions */
+_STATE_PRECOND_FUNC_COMMENT = """
+/* Prototypes for state precondition checks */
 """
-_PRECOND_FUNC_COMMENT = \
+_EVENT_TRANS_FUNC_COMMENT = """
+/* Prototypes for event callback functions */
 """
-/* Prototypes for precondition checks */
+_EVENT_PRECOND_FUNC_COMMENT = """
+/* Prototypes for event precondition checks */
 """
 
 _TRANS_FUNC_PROTO_START = "void %(func)s("
-_TRANS_FUNC_PROTO_CURRENT = "enum %(enum_name)s"
-_TRANS_FUNC_PROTO_NEW = "enum %(enum_name)s"
+_TRANS_FUNC_PROTO_EVENT = "enum %(event_enum)s"
+_TRANS_FUNC_PROTO_CURRENT = "enum %(state_enum)s"
+_TRANS_FUNC_PROTO_NEW = "enum %(state_enum)s"
 _TRANS_FUNC_PROTO_CTX = "void *"
 _TRANS_FUNC_PROTO_NOARGS = "void"
 _TRANS_FUNC_PROTO_END = ");\n"
 _PRECOND_FUNC_PROTO_START = "int %(func)s("
-_PRECOND_FUNC_PROTO_CURRENT = "enum %(enum_name)s"
-_PRECOND_FUNC_PROTO_NEW = "enum %(enum_name)s"
+_PRECOND_FUNC_PROTO_EVENT = "enum %(event_enum)s"
+_PRECOND_FUNC_PROTO_CURRENT = "enum %(state_enum)s"
+_PRECOND_FUNC_PROTO_NEW = "enum %(state_enum)s"
 _PRECOND_FUNC_PROTO_CTX = "void *"
 _PRECOND_FUNC_PROTO_NOARGS = "void"
 _PRECOND_FUNC_PROTO_END = ");\n"
@@ -746,7 +1260,7 @@ void %(precond_set_ctx_func)s(struct %(struct_name)s *fsm, void *ctx);
 
 _STATE_INIT_FUNC_MULTI = \
 """struct %(struct_name)s *
-%(init_func)s(enum %(enum_name)s initial_state, char *errbuf, size_t errlen)
+%(init_func)s(enum %(state_enum)s initial_state, char *errbuf, size_t errlen)
 {
 	struct %(struct_name)s *ret = NULL;
 
@@ -757,7 +1271,7 @@ _STATE_INIT_FUNC_MULTI = \
 		if (errlen > 0 && errbuf != NULL) {
 			snprintf(errbuf, errlen,
 			    "State %%s (%%d) is not a valid start state",
-			    %(enum_to_string_func)s_safe(initial_state),
+			    %(state_enum_to_string_func)s_safe(initial_state),
 			    initial_state);
 		}
 		return NULL;
@@ -805,14 +1319,34 @@ _STATE_CALL_SWITCH_FINISH = \
 		break; /* Hush compiler warnings */
 	}
 """
+
+_EVENT_CALL_SWITCH_START = \
+"""
+	/* %(what)s */
+	switch (ev) {
+"""
+
+_EVENT_CALL_SWITCH_CASE = \
+"""	case %(event)s:
+"""
+
+_EVENT_CALL_SWITCH_FINISH = \
+"""	default:
+		break; /* Hush compiler warnings */
+	}
+"""
+
 # -------------------------------------------------------------------------
 
+_PRECOND_FUNC_CALLSIG_EVENT = "ev"
 _PRECOND_FUNC_CALLSIG_CURRENT = "fsm->current_state"
 _PRECOND_FUNC_CALLSIG_NEW = "new_state"
 _PRECOND_FUNC_CALLSIG_CTX = "fsm->precond_ctx"
 _PRECOND_FUNC_CALLSIG_START = "\t\tif (%(func)s("
 _PRECOND_FUNC_CALLSIG_END = ") != 0)\n\t\t\tgoto %(which)s_precond_fail;\n"
+_TRANS_FUNC_CALLSIG_EVENT = "ev"
 _TRANS_FUNC_CALLSIG_CURRENT = "fsm->current_state"
+_TRANS_FUNC_CALLSIG_OLD = "old_state"
 _TRANS_FUNC_CALLSIG_NEW = "new_state"
 _TRANS_FUNC_CALLSIG_CTX = "fsm->trans_ctx"
 _TRANS_FUNC_CALLSIG_START = "\t\t%(func)s("
@@ -846,7 +1380,7 @@ _ENTRY_PRECOND_FAIL = \
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "State %%s entry precondition not satisfied",
-		    %(enum_to_string_func)s_safe(new_state));
+		    %(state_enum_to_string_func)s_safe(new_state));
 	}
 	return -1;
 """
@@ -856,12 +1390,95 @@ _EXIT_PRECOND_FAIL = \
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "State %%s exit precondition not satisfied",
-		    %(enum_to_string_func)s_safe(fsm->current_state));
+		    %(state_enum_to_string_func)s_safe(fsm->current_state));
 	}
 	return -1;
 """
 
+_EVENT_PRECOND_FAIL = \
+""" event_precond_fail:
+	if (errlen > 0 && errbuf != NULL) {
+		snprintf(errbuf, errlen,
+		    "Event %%s entry precondition not satisfied",
+		    %(event_enum_to_string_func)s_safe(ev));
+	}
+	return -1;
+"""
+
+_EVENT_INVALID_FOR_STATE = \
+""" bad_event:
+	if (errlen > 0 && errbuf != NULL) {
+		snprintf(errbuf, errlen,
+		    "Invalid event %%s in state %%s",
+		    %(event_enum_to_string_func)s_safe(ev),
+		    %(state_enum_to_string_func)s_safe(fsm->current_state));
+	}
+	return -1;
+"""
+
+_BAD_TRANSITION = \
+""" bad_transition:
+	if (errlen > 0 && errbuf != NULL) {
+		snprintf(errbuf, errlen,
+		    "Illegal state transition attempted: %%s -> %%s",
+		    %(state_enum_to_string_func)s_safe(fsm->current_state),
+		    %(state_enum_to_string_func)s_safe(new_state));
+	}
+	return -1;
+"""
+
+_CHECK_NEW_STATE = \
+"""	if (_is_%(state_enum)s_valid(new_state) != 0) {
+		if (errlen > 0 && errbuf != NULL) {
+			snprintf(errbuf, errlen, "Invalid new_state (%%d)",
+			    new_state);
+		}
+		return -1;
+	}
+"""
+
+_CHECK_EVENT = \
+"""	if (_is_%(event_enum)s_valid(ev) != 0) {
+		if (errlen > 0 && errbuf != NULL)
+			snprintf(errbuf, errlen, "Invalid event (%%d)", ev);
+		return -1;
+	}
+"""
+
 # -------------------------------------------------------------------------
+
+_EVENT_FUNCTIONS="""
+static int
+_is_%(event_enum)s_valid(enum %(event_enum)s n)
+{
+	if (!(n >= %(min_event_valid)s && n <= %(max_event_valid)s))
+		return -1;
+	return 0;
+}
+
+const char *
+%(event_enum_to_string_func)s(enum %(event_enum)s n)
+{
+	const char *event_names[] = {
+%(enum_contents)s	};
+
+	if (_is_%(event_enum)s_valid(n) != 0)
+		return NULL;
+	return event_names[n];
+}
+
+const char *
+%(event_enum_to_string_func)s_safe(enum %(event_enum)s n)
+{
+	const char *r = %(event_enum_to_string_func)s(n);
+
+	return r == NULL ? "[INVALID]" : r;
+}
+"""
+
+# -------------------------------------------------------------------------
+
+_NEW_STATE_VAR = "	enum %(state_enum)s new_state;\n"
 
 _C_SOURCE="""%(banner)s%(self_promotion)s
 
@@ -875,36 +1492,37 @@ _C_SOURCE="""%(banner)s%(self_promotion)s
 
 /* Private view of opaque FSM structure */
 struct %(struct_name)s {
-	enum %(enum_name)s current_state;%(trans_struct)s%(precond_struct)s
+	enum %(state_enum)s current_state;%(trans_struct)s%(precond_struct)s
 };
-%(state_func_prototypes)s
+%(state_func_prototypes)s%(event_func_prototypes)s
 static int
-_is_%(enum_name)s_valid(enum %(enum_name)s n)
+_is_%(state_enum)s_valid(enum %(state_enum)s n)
 {
-	if (!(n >= %(min_valid)s && n <= %(max_valid)s))
+	if (!(n >= %(min_state_valid)s && n <= %(max_state_valid)s))
 		return -1;
 	return 0;
 }
 %(trans_set)s%(precond_set)s
 const char *
-%(enum_to_string_func)s(enum %(enum_name)s n)
+%(state_enum_to_string_func)s(enum %(state_enum)s n)
 {
 	const char *state_names[] = {
 %(enum_contents)s	};
 
-	if (_is_%(enum_name)s_valid(n) != 0)
+	if (_is_%(state_enum)s_valid(n) != 0)
 		return NULL;
 	return state_names[n];
 }
 
 const char *
-%(enum_to_string_func)s_safe(enum %(enum_name)s n)
+%(state_enum_to_string_func)s_safe(enum %(state_enum)s n)
 {
-	const char *r = %(enum_to_string_func)s(n);
+	const char *r = %(state_enum_to_string_func)s(n);
 
 	return r == NULL ? "[INVALID]" : r;
 }
 
+%(event_functions_optional)s
 %(init_func_def)s
 
 void
@@ -914,56 +1532,36 @@ void
 	free(fsm);
 }
 
-enum %(enum_name)s
+enum %(state_enum)s
 %(current_state_func)s(struct %(struct_name)s *fsm)
 {
 	return fsm->current_state;
 }
-
-int
-%(advance_func)s(struct %(struct_name)s *fsm, enum %(enum_name)s new_state,
-    char *errbuf, size_t errlen)
+%(advance_func_proto)s
 {
-	enum %(enum_name)s old_state;
-
+	enum %(state_enum)s old_state;
+%(new_state_opt)s
 	/* Sanity check states */
-	if (_is_%(enum_name)s_valid(fsm->current_state) != 0) {
+	if (_is_%(state_enum)s_valid(fsm->current_state) != 0) {
 		if (errlen > 0 && errbuf != NULL) {
 			snprintf(errbuf, errlen, "Invalid current_state (%%d)",
 			    fsm->current_state);
 		}
 		return -1;
 	}
-	if (_is_%(enum_name)s_valid(new_state) != 0) {
-		if (errlen > 0 && errbuf != NULL) {
-			snprintf(errbuf, errlen, "Invalid new_state (%%d)",
-			    fsm->current_state);
-		}
-		return -1;
-	}
-
-	/* Transition checks */
-	switch (fsm->current_state) {
-%(transition_check)s	}
-%(exit_preconds)s%(entry_preconds)s%(exit_funcs)s
+%(new_state_check_optional)s%(event_check_optional)s
+%(transition_check)s
+%(event_preconds)s%(exit_preconds)s%(entry_preconds)s%(event_callbacks)s%(exit_funcs)s
 	/* Switch state now */
 	old_state = fsm->current_state;
 	fsm->current_state = new_state;
 %(entry_funcs)s
 	return 0;
 
- bad_transition:
-	if (errlen > 0 && errbuf != NULL) {
-		snprintf(errbuf, errlen,
-		    "Illegal state transition attempted: %%s -> %%s",
-		    %(enum_to_string_func)s_safe(fsm->current_state),
-		    %(enum_to_string_func)s_safe(new_state));
-	}
-	return -1;
 %(error_handlers)s}
 """
 
 # -------------------------------------------------------------------------
 
-if __name__ == '__main__': main()
-
+if __name__ == '__main__':
+	main()

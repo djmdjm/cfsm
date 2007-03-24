@@ -1,5 +1,5 @@
 CFSM=../cfsm
-TARGETS=t0 t1 t2 t3
+TARGETS=t_ex0 t_ex1 t1 t2 t3
 
 all: $(TARGETS)
 	@echo -n "Running tests: "
@@ -10,12 +10,18 @@ all: $(TARGETS)
 	done
 	@echo ""
 
-# Make sure the example works!
-t0_fsm.c: ../example.fsm
-	$(CFSM) -C t0_fsm.c -H t0_fsm.h ../example.fsm
+# Make sure the examples work!
+t_ex0_fsm.c: ../example.fsm
+	$(CFSM) -C t_ex0_fsm.c -H t_ex0_fsm.h ../example.fsm
 
-t0: t0_fsm.c t0_fsm.o t0.o
-	$(CC) -o $@ t0.o t0_fsm.o
+t_ex0: t_ex0_fsm.c t_ex0_fsm.o t_ex0.o
+	$(CC) -o $@ t_ex0.o t_ex0_fsm.o
+
+t_ex1_fsm.c: ../example2.fsm
+	$(CFSM) -C t_ex1_fsm.c -H t_ex1_fsm.h ../example2.fsm
+
+t_ex1: t_ex1_fsm.c t_ex1_fsm.o t_ex1.o
+	$(CC) -o $@ t_ex1.o t_ex1_fsm.o
 
 t1_fsm.c: t1_fsm.fsm
 	$(CFSM) -C t1_fsm.c -H t1_fsm.h t1_fsm.fsm

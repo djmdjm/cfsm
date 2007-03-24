@@ -1,0 +1,90 @@
+# -------------------------------------------------------------------
+# Comments are delimited with a '#' character and may start anywhere
+# on a line. Blank lines are ignored.
+
+# Define the enumeration and opaque struct types the state machine will use
+state-enum-type mystate
+event-enum-type myevent
+fsm-struct-type myfsm
+
+# Define the names of the exported API functions
+current-state-function myfsm_current
+initialise-function myfsm_init
+free-function myfsm_free
+advance-function myfsm_advance
+state-enum-to-string-function myfsm_state_ntop
+event-enum-to-string-function myfsm_event_ntop
+set-transition-ctx-function myfsm_set_transition_ctx
+set-precondition-ctx-function myfsm_set_precondition_ctx
+
+# Specify what arguments we want to pass to the transition preconditions
+# and callbacks
+precondition-function-args event,new-state,ctx
+transition-function-args event,old-state
+event-callback-args event,ctx
+event-precondition-args event,old-state,new-state,ctx
+
+# Define some states and events that trigger transitions between them
+state STATE_A
+	initial-state
+	on-event A_DONE -> STATE_B
+	entry-precondition a_ready
+	exit-precondition a_finished
+	onentry-func a_enter
+	onexit-func a_leave
+state STATE_B
+	on-event B_DONE1 -> STATE_C1
+	on-event B_DONE2 -> STATE_C2
+	entry-precondition b_ready
+	exit-precondition b_finished
+	onentry-func b_enter
+	onexit-func b_leave
+state STATE_C1
+	on-event C_DONE1 -> STATE_D1
+	on-event C_DONE2 -> STATE_D2
+state STATE_C2
+	on-event C_DONE1 -> STATE_D3
+	on-event C_DONE2 -> STATE_D4
+state STATE_D1
+	on-event D_DONE1 -> STATE_E1
+	on-event D_DONE2 -> STATE_E2
+	on-event D_DONE3 -> STATE_E3
+state STATE_D2
+	on-event D_DONE1 -> STATE_E1
+	on-event D_DONE2 -> STATE_E2
+	on-event D_DONE3 -> STATE_E3
+state STATE_D3
+	on-event D_DONE1 -> STATE_E1
+	on-event D_DONE2 -> STATE_E2
+	on-event D_DONE3 -> STATE_E3
+state STATE_D4
+	on-event D_DONE1 -> STATE_E1
+	on-event D_DONE2 -> STATE_E2
+	on-event D_DONE3 -> STATE_E3
+state STATE_E1
+	on-event E_DONE -> STATE_F
+state STATE_E2
+	on-event E_DONE -> STATE_F
+state STATE_E3
+	on-event E_DONE -> STATE_F
+state STATE_F
+	on-event F_DONE1 -> STATE_G
+	on-event F_DONE2 -> STATE_B
+state STATE_G
+	on-event G_DONE1 -> STATE_A
+	on-event G_DONE2 -> STATE_F
+
+# Fill in some more details for the events, e.g. callbacks
+# This section is optional; events without extra annotations
+# are still created, but won't have callbacks of preconditions
+# attached.
+event G_DONE1
+	event-callback g_done1_callback
+event F_DONE1
+	event-callback f_done1_callback
+	event-precondition f_done1_precondition
+event A_DONE
+	event-precondition a_done_precondition
+
+# -------------------------------------------------------------------
+

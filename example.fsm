@@ -11,7 +11,7 @@ current-state-function myfsm_current
 initialise-function myfsm_init
 free-function myfsm_free
 advance-function myfsm_advance
-enum-to-string-function myfsm_tostring
+state-enum-to-string-function myfsm_tostring
 set-transition-ctx-function myfsm_set_transition_ctx
 set-precondition-ctx-function myfsm_set_precondition_ctx
 
