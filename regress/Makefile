@@ -1,3 +1,7 @@
+# Public domain - Damien Miller <djm@mindrot.org> 2007-03-26
+
+# $Id: Makefile,v 1.9 2007/03/26 03:22:24 djm Exp $
+
 CFSM=../cfsm
 TARGETS=t1 t2 t3 t_ex0 t_ex1 
 

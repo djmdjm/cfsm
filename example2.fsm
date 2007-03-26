@@ -1,3 +1,8 @@
+# Example event-driven state machine
+# Public domain - Damien Miller <djm@mindrot.org> 2007-03-26
+
+# $Id: example2.fsm,v 1.3 2007/03/26 03:22:24 djm Exp $
+
 # -------------------------------------------------------------------
 # Comments are delimited with a '#' character and may start anywhere
 # on a line. Blank lines are ignored.

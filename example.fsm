@@ -1,3 +1,8 @@
+# Example state machine
+# Public domain - Damien Miller <djm@mindrot.org> 2007-03-26
+
+# $Id: example.fsm,v 1.7 2007/03/26 03:22:23 djm Exp $
+
 # -------------------------------------------------------------------
 # Comments are delimited with a '#' character and may start anywhere
 # on a line. Blank lines are ignored.

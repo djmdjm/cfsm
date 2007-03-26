@@ -1,6 +1,7 @@
 20070326
  - (djm) Return a meaningful error code "CFSM_ERR_*" rather than -1 for
    everything
+ - (djm) RCS Ids in everything
 
 20070324
  - (djm) Implement event-driven FSMs
@@ -33,4 +34,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-
+$Id: ChangeLog,v 1.10 2007/03/26 03:22:23 djm Exp $

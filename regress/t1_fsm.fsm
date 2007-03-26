@@ -1,6 +1,8 @@
 # This file is in the public domain
 # Damien Miller 2007-02-07
 
+# $Id: t1_fsm.fsm,v 1.3 2007/03/26 03:22:24 djm Exp $
+
 precondition-function-args new-state
 transition-function-args none
 

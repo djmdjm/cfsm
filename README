@@ -29,3 +29,5 @@ reasonably self-documenting too - please have a look at the comments in
 the generated header file for API usage.
 
 Damien Miller <djm@mindrot.org> 2007-02-07
+
+$Id: README,v 1.6 2007/03/26 03:22:23 djm Exp $

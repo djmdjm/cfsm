@@ -3,6 +3,8 @@
  * Damien Miller 2007-02-07
  */
 
+/* $Id: t3.c,v 1.4 2007/03/26 03:22:24 djm Exp $ */
+
 #include <sys/types.h>
 
 #include <stdio.h>
