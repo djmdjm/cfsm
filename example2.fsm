@@ -1,7 +1,7 @@
 # Example event-driven state machine
 # Public domain - Damien Miller <djm@mindrot.org> 2007-03-26
 
-# $Id: example2.fsm,v 1.3 2007/03/26 03:22:24 djm Exp $
+# $Id: example2.fsm,v 1.4 2007/03/26 03:58:04 djm Exp $
 
 # -------------------------------------------------------------------
 # Comments are delimited with a '#' character and may start anywhere
@@ -31,6 +31,8 @@ event-precondition-args event,old-state,new-state,ctx
 state STATE_A
 	initial-state
 	on-event A_DONE -> STATE_B
+	ignore-event C_DONE1
+	ignore-event C_DONE2
 	entry-precondition a_ready
 	exit-precondition a_finished
 	onentry-func a_enter
@@ -38,6 +40,7 @@ state STATE_A
 state STATE_B
 	on-event B_DONE1 -> STATE_C1
 	on-event B_DONE2 -> STATE_C2
+	ignore-event X_DONE
 	entry-precondition b_ready
 	exit-precondition b_finished
 	onentry-func b_enter
