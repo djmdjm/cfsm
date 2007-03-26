@@ -1078,9 +1078,9 @@ struct %(struct_name)s *%(init_func)s(char *errbuf, size_t errlen);"""
 _ADVANCE_FUNC_COMMENT_STATE_BASED = \
 """/*
  * Attempt to advance to the state specified by "new_state".%(ctx)s
- * Will return 0 on success, -1 on failure. If "errbuf" is not NULL,
- * upto "errlen" bytes of error message will be copied into "errbuf" on
- * failure.
+ * Will return CFSM_OK on success or one of the CFSM_ERR_* codes on failure.
+ * If "errbuf" is not NULL, upto "errlen" bytes of error message will be 
+ * copied into "errbuf" on failure.
  */"""
 
 _ADVANCE_FUNC_PROTO_STATE_BASED = """
@@ -1090,9 +1090,9 @@ int %(advance_func)s(struct %(struct_name)s *fsm, enum %(state_enum)s new_state,
 _ADVANCE_FUNC_COMMENT_EVENT_BASED = \
 """/*
  * Execute a pre-defined event on the FSM that may trigger a transition.%(ctx)s
- * Will return 0 on success or -1 on failure. If "errbuf" is not NULL,
- * upto "errlen" bytes of error message will be copied into "errbuf" on
- * failure.
+ * Will return CFSM_OK on success or one of the CFSM_ERR_* codes on failure.
+ * If "errbuf" is not NULL, upto "errlen" bytes of error message will be 
+ * copied into "errbuf" on failure.
  */"""
 
 _ADVANCE_FUNC_PROTO_EVENT_BASED = """
@@ -1150,6 +1150,17 @@ enum %(state_enum)s {
  * through this API
  */
 struct %(struct_name)s;
+
+/*
+ * Possible error return values
+ */
+#ifndef CFSM_OK
+# define CFSM_OK			0
+# define CFSM_ERR_INVALID_STATE		-1
+# define CFSM_ERR_INVALID_EVENT		-2
+# define CFSM_ERR_INVALID_TRANSITION	-3
+# define CFSM_ERR_PRECONDITION		-4
+#endif /* CFSM_OK */
 
 %(init_func_proto_comments)s
 /*
@@ -1315,7 +1326,7 @@ _ENTRY_PRECOND_FAIL = \
 		    "State %%s entry precondition not satisfied",
 		    %(state_enum_to_string_func)s_safe(new_state));
 	}
-	return -1;
+	return CFSM_ERR_PRECONDITION;
 """
 
 _EXIT_PRECOND_FAIL = \
@@ -1325,7 +1336,7 @@ _EXIT_PRECOND_FAIL = \
 		    "State %%s exit precondition not satisfied",
 		    %(state_enum_to_string_func)s_safe(fsm->current_state));
 	}
-	return -1;
+	return CFSM_ERR_PRECONDITION;
 """
 
 _EVENT_PRECOND_FAIL = \
@@ -1335,7 +1346,7 @@ _EVENT_PRECOND_FAIL = \
 		    "Event %%s entry precondition not satisfied",
 		    %(event_enum_to_string_func)s_safe(ev));
 	}
-	return -1;
+	return CFSM_ERR_PRECONDITION;
 """
 
 _EVENT_INVALID_FOR_STATE = \
@@ -1346,7 +1357,7 @@ _EVENT_INVALID_FOR_STATE = \
 		    %(event_enum_to_string_func)s_safe(ev),
 		    %(state_enum_to_string_func)s_safe(fsm->current_state));
 	}
-	return -1;
+	return CFSM_ERR_INVALID_TRANSITION;
 """
 
 _BAD_TRANSITION = \
@@ -1357,7 +1368,7 @@ _BAD_TRANSITION = \
 		    %(state_enum_to_string_func)s_safe(fsm->current_state),
 		    %(state_enum_to_string_func)s_safe(new_state));
 	}
-	return -1;
+	return CFSM_ERR_INVALID_TRANSITION;
 """
 
 _CHECK_NEW_STATE = \
@@ -1366,7 +1377,7 @@ _CHECK_NEW_STATE = \
 			snprintf(errbuf, errlen, "Invalid new_state (%%d)",
 			    new_state);
 		}
-		return -1;
+		return CFSM_ERR_INVALID_STATE;
 	}
 """
 
@@ -1374,7 +1385,7 @@ _CHECK_EVENT = \
 """	if (_is_%(event_enum)s_valid(ev) != 0) {
 		if (errlen > 0 && errbuf != NULL)
 			snprintf(errbuf, errlen, "Invalid event (%%d)", ev);
-		return -1;
+		return CFSM_ERR_INVALID_EVENT;
 	}
 """
 
@@ -1480,7 +1491,7 @@ enum %(state_enum)s
 			snprintf(errbuf, errlen, "Invalid current_state (%%d)",
 			    fsm->current_state);
 		}
-		return -1;
+		return CFSM_ERR_INVALID_STATE;
 	}
 %(new_state_check_optional)s%(event_check_optional)s
 %(transition_check)s
@@ -1489,7 +1500,7 @@ enum %(state_enum)s
 	old_state = fsm->current_state;
 	fsm->current_state = new_state;
 %(entry_funcs)s
-	return 0;
+	return CFSM_OK;
 
 %(error_handlers)s}
 """

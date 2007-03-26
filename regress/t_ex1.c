@@ -137,10 +137,13 @@ main(int argc, char **argv)
 	myfsm_free(fsm);
 
 	assert((fsm = myfsm_init(NULL, 0)) != NULL);
-	assert(myfsm_advance(fsm, G_DONE1, NULL, NULL, 0) == -1);
+	assert(myfsm_advance(fsm, G_DONE1, NULL,
+	    NULL, 0) == CFSM_ERR_INVALID_TRANSITION);
 	assert(myfsm_current(fsm) == STATE_A);
-	assert(myfsm_advance(fsm, B_DONE1, NULL, NULL, 0) == -1);
-	assert(myfsm_advance(fsm, B_DONE2, NULL, NULL, 0) == -1);
+	assert(myfsm_advance(fsm, B_DONE1, NULL,
+	    NULL, 0) == CFSM_ERR_INVALID_TRANSITION);
+	assert(myfsm_advance(fsm, B_DONE2, NULL,
+	    NULL, 0) == CFSM_ERR_INVALID_TRANSITION);
 	assert(myfsm_current(fsm) == STATE_A);
 
 	assert(a_enter_called == 0);
@@ -156,28 +159,32 @@ main(int argc, char **argv)
 	assert(b_finished_called == 0);
 	assert(a_ready_called == 0);
 
-	assert(myfsm_advance(fsm, A_DONE, &a_finished_called, NULL, 0) == -1);
+	assert(myfsm_advance(fsm, A_DONE, &a_finished_called,
+	    NULL, 0) == CFSM_ERR_PRECONDITION);
 	assert(a_done_precondition_called == 1);
 	assert(b_enter_called == 0);
 	assert(a_leave_called == 0);
 	assert(b_ready_called == 0);
 	assert(a_finished_called == 0);
 
-	assert(myfsm_advance(fsm, A_DONE, &a_finished_called, NULL, 0) == -1);
+	assert(myfsm_advance(fsm, A_DONE, &a_finished_called,
+	    NULL, 0) == CFSM_ERR_PRECONDITION);
 	assert(a_done_precondition_called == 2);
 	assert(b_enter_called == 0);
 	assert(a_leave_called == 0);
 	assert(b_ready_called == 0);
 	assert(a_finished_called == 1);
 
-	assert(myfsm_advance(fsm, A_DONE, &a_finished_called, NULL, 0) == -1);
+	assert(myfsm_advance(fsm, A_DONE, &a_finished_called,
+	    NULL, 0) == CFSM_ERR_PRECONDITION);
 	assert(a_done_precondition_called == 3);
 	assert(b_enter_called == 0);
 	assert(a_leave_called == 0);
 	assert(b_ready_called == 1);
 	assert(a_finished_called == 2);
 
-	assert(myfsm_advance(fsm, A_DONE, &a_finished_called, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, A_DONE, &a_finished_called,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_B);
 	assert(a_done_precondition_called == 4);
 	assert(b_enter_called == 1);
@@ -186,64 +193,79 @@ main(int argc, char **argv)
 	assert(a_finished_called == 3);
 	assert(b_finished_called == 0);
 
-	assert(myfsm_advance(fsm, B_DONE2, &a_finished_called, NULL, 0) == -1);
+	assert(myfsm_advance(fsm, B_DONE2, &a_finished_called,
+	    NULL, 0) == CFSM_ERR_PRECONDITION);
 	assert(myfsm_current(fsm) == STATE_B);
 	assert(b_finished_called == 1);
 	assert(b_leave_called == 0);
 
-	assert(myfsm_advance(fsm, B_DONE2, &a_finished_called, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, B_DONE2, &a_finished_called,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_C2);
 	assert(b_finished_called == 2);
 	assert(b_leave_called == 1);
 
-	assert(myfsm_advance(fsm, B_DONE1, &a_finished_called, NULL, 0) == -1);
+	assert(myfsm_advance(fsm, B_DONE1, &a_finished_called,
+	    NULL, 0) == CFSM_ERR_INVALID_TRANSITION);
 	assert(myfsm_current(fsm) == STATE_C2);
 
-	assert(myfsm_advance(fsm, C_DONE2, NULL, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, C_DONE2, NULL,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_D4);
 
-	assert(myfsm_advance(fsm, D_DONE2, NULL, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, D_DONE2, NULL,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_E2);
 
-	assert(myfsm_advance(fsm, E_DONE, NULL, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, E_DONE, NULL,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_F);
 
 	assert(f_done1_called == 0);
 	assert(f_done1_precondition_called == 0);
-	assert(myfsm_advance(fsm, F_DONE1, &a_finished_called, NULL, 0) == -1);
+	assert(myfsm_advance(fsm, F_DONE1, &a_finished_called,
+	    NULL, 0) == CFSM_ERR_PRECONDITION);
 	assert(myfsm_current(fsm) == STATE_F);
 	assert(f_done1_called == 0);
 	assert(f_done1_precondition_called == 1);
 
-	assert(myfsm_advance(fsm, F_DONE1, &a_finished_called, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, F_DONE1, &a_finished_called,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_G);
 	assert(f_done1_called == 1);
 	assert(f_done1_precondition_called == 2);
 
-	assert(myfsm_advance(fsm, G_DONE2, &a_finished_called, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, G_DONE2, &a_finished_called,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_F);
 
-	assert(myfsm_advance(fsm, F_DONE2, &a_finished_called, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, F_DONE2, &a_finished_called,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_B);
 
-	assert(myfsm_advance(fsm, B_DONE1, &a_finished_called, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, B_DONE1, &a_finished_called,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_C1);
-	assert(myfsm_advance(fsm, C_DONE1, NULL, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, C_DONE1, NULL,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_D1);
-	assert(myfsm_advance(fsm, D_DONE2, NULL, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, D_DONE2, NULL, NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_E2);
-	assert(myfsm_advance(fsm, E_DONE, NULL, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, E_DONE, NULL, NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_F);
-	assert(myfsm_advance(fsm, F_DONE1, &a_finished_called, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, F_DONE1, &a_finished_called,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_G);
 
 	assert(g_done1_called == 0);
-	assert(myfsm_advance(fsm, G_DONE1, &a_finished_called, NULL, 0) == -1);
+	assert(myfsm_advance(fsm, G_DONE1, &a_finished_called,
+	    NULL, 0) == CFSM_ERR_PRECONDITION);
 	assert(myfsm_current(fsm) == STATE_G);
 	assert(a_enter_called == 0);
 	assert(a_ready_called == 1);
 
-	assert(myfsm_advance(fsm, G_DONE1, &a_finished_called, NULL, 0) == 0);
+	assert(myfsm_advance(fsm, G_DONE1, &a_finished_called,
+	    NULL, 0) == CFSM_OK);
 	assert(myfsm_current(fsm) == STATE_A);
 	assert(g_done1_called == 1);
 	assert(a_enter_called == 1);

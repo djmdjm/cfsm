@@ -1,3 +1,7 @@
+20070326
+ - (djm) Return a meaningful error code "CFSM_ERR_*" rather than -1 for
+   everything
+
 20070324
  - (djm) Implement event-driven FSMs
  - (djm) Remove the ctx settor functions in favour of passing in a ctx

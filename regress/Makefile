@@ -1,5 +1,5 @@
 CFSM=../cfsm
-TARGETS=t_ex0 t_ex1 t1 t2 t3
+TARGETS=t1 t2 t3 t_ex0 t_ex1 
 
 all: $(TARGETS)
 	@echo -n "Running tests: "
