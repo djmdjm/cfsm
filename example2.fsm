@@ -1,7 +1,7 @@
 # Example event-driven state machine
 # Public domain - Damien Miller <djm@mindrot.org> 2007-03-26
 
-# $Id: example2.fsm,v 1.4 2007/03/26 03:58:04 djm Exp $
+# $Id: example2.fsm,v 1.5 2007/03/26 04:02:37 djm Exp $
 
 # -------------------------------------------------------------------
 # Comments are delimited with a '#' character and may start anywhere
@@ -82,7 +82,7 @@ state STATE_G
 
 # Fill in some more details for the events, e.g. callbacks
 # This section is optional; events without extra annotations
-# are still created, but won't have callbacks of preconditions
+# are still created, but won't have callbacks or preconditions
 # attached.
 event G_DONE1
 	event-callback g_done1_callback
