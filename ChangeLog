@@ -1,3 +1,6 @@
+20070408
+ - (djm) Extract C source and header from cfsm and factor it into templates
+
 20070407
  - (djm) Begin reimplementation of cfsm in C, starting with a lexer/parser
    and skeleton main executable.
@@ -39,4 +42,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.12 2007/04/08 03:32:54 djm Exp $
+$Id: ChangeLog,v 1.13 2007/04/08 03:34:19 djm Exp $
