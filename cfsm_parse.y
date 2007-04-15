@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_parse.y,v 1.5 2007/04/15 09:43:58 djm Exp $ */
+/* $Id: cfsm_parse.y,v 1.6 2007/04/15 10:12:26 djm Exp $ */
 
 %{
 #include <sys/types.h>
@@ -89,6 +89,9 @@ u_int trans_callback_args = 0;
 u_int event_callback_args = 0;
 u_int trans_precond_args = 0;
 u_int event_precond_args = 0;
+
+u_int next_state_specified = 0;
+u_int event_specified = 0;
 
 #define CB_ARG_CTX		(1)
 #define CB_ARG_EVENT		(1<<1)
@@ -309,6 +312,13 @@ next_state_def:		NEXT_STATE ID {
 			free($2);
 			YYERROR;
 		}
+		if (event_specified) {
+			yyerror("Cannot mix events with explicit "
+			    "state transitions");
+			free($2);
+			YYERROR;
+		}
+		next_state_specified = 1;
 		if ((next_states = (struct xdict *)xdict_item_s(current_state,
 		    "next_states")) == NULL)
 			errx(1, "next_state_def: state lacks next_states");
@@ -327,7 +337,11 @@ on_event_def:		EVENT_ADVANCE ID MOVETO ID {
 			free($4);
 			YYERROR;
 		}
-		get_or_create_event($2);
+		if (get_or_create_event($2) == NULL) {
+			free($2);
+			free($4);
+			YYERROR;
+		}
 		if ((events = (struct xdict *)xdict_item_s(current_state,
 		    "events")) == NULL)
 			errx(1, "on_event_def: state lacks events");
@@ -346,7 +360,10 @@ ignore_event_def:	IGNORE_EVENT ID {
 			free($2);
 			YYERROR;
 		}
-		get_or_create_event($2);
+		if (get_or_create_event($2) == NULL) {
+			free($2);
+			YYERROR;
+		}
 		if ((events = (struct xdict *)xdict_item_s(current_state,
 		    "events")) == NULL)
 			errx(1, "on_event_def: state lacks events");
@@ -400,7 +417,10 @@ exit_precond_def:	TRANSITION_EXIT_PRECOND ID {
 
 event_decl:		EVENT ID {
 		current_state = NULL;
-		current_event = get_or_create_event($2);
+		if ((current_event = get_or_create_event($2)) == NULL) {
+			free($2);
+			YYERROR;
+		}
 		free($2);
 	}
 	;
@@ -536,6 +556,12 @@ static struct xdict *
 get_or_create_event(char *name)
 {
 	struct xdict *ret;
+
+	if (next_state_specified) {
+		yyerror("Cannot mix events with explicit state transitions");
+		return NULL;
+	}
+	event_specified = 1;
 
 	ret = (struct xdict *)xdict_item_s(fsm_events, name);
 	if (ret == NULL) {
