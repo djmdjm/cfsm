@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_parse.y,v 1.8 2007/04/15 13:54:58 djm Exp $ */
+/* $Id: cfsm_parse.y,v 1.9 2007/04/15 23:00:08 djm Exp $ */
 
 %{
 #include <sys/types.h>
@@ -822,7 +822,7 @@ finalise_namespace(void)
 	}
 	xiterator_free(siter);
 
-	/* Now look for unreachable (indegree == ) states */
+	/* Now look for unreachable (indegree == 0) states */
 	if ((siter = xobject_getiter((struct xobject *)fsm_states)) == NULL)
 		errx(1, "%s(%d): xobject_getiter", __func__, __LINE__);
 	while ((sitem = xiterator_next(siter)) != NULL) {
