@@ -1,3 +1,5 @@
+improve the grammar to get rid of current_state/event crap
+
 optionally generate callback stubs into a separate file too
 
 explicitly numbered events / states
@@ -51,4 +53,4 @@ wildcard events:
 
 wildcard next states
 
-$Id: TODO,v 1.12 2007/04/15 02:11:17 djm Exp $
+$Id: TODO,v 1.13 2007/04/15 22:58:50 djm Exp $
