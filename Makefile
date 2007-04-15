@@ -8,8 +8,8 @@ CFLAGS+=    -Wunused
 CFLAGS+=    -Wsign-compare
 #CFLAGS+=    -Wbounded
 CFLAGS+=    -Wshadow
-CFLAGS+=    -Wno-pointer-sign
-CFLAGS+=    -Wno-attributes
+#CFLAGS+=    -Wno-pointer-sign
+#CFLAGS+=    -Wno-attributes
 
 CFLAGS+=    -g -std=gnu99 -D_GNU_SOURCE
 CFLAGS+=    -I.
@@ -30,10 +30,10 @@ cfsm: cfsm.o cfsm_parse.o cfsm_lex.o strlcat.o
 cfsm_lex.o: cfsm_parse.h
 
 cfsm_lex.c: cfsm_lex.l
-	$(LEX) -o $@ cfsm_lex.l
+	$(LEX) -o$@ cfsm_lex.l
 
 cfsm_parse.c: cfsm_parse.y
-	$(YACC) -d -o $@ cfsm_parse.y
+	$(YACC) -d -o$@ cfsm_parse.y
 
 clean:
 	rm -f *.o cfsm_xxx cfsm_lex.[ch] cfsm_parse.[ch]
