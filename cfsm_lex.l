@@ -14,9 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_lex.l,v 1.2 2007/04/15 02:11:17 djm Exp $ */
+/* $Id: cfsm_lex.l,v 1.3 2007/04/15 08:45:58 djm Exp $ */
 
 %{
+#include <sys/types.h>
+#include <string.h>
+
 #include "cfsm_parse.h"
 
 extern u_int lnum;

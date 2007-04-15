@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_parse.y,v 1.3 2007/04/15 06:17:24 djm Exp $ */
+/* $Id: cfsm_parse.y,v 1.4 2007/04/15 08:45:58 djm Exp $ */
 
 %{
 #include <sys/types.h>
@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <ctype.h>
 #include <err.h>
 
 #include "xobject.h"
@@ -30,39 +31,56 @@
 
 #include "cfsm.h"
 
+extern char *yytext;
+
+/* Local prototypes */
 int yyparse(void);
 void yyerror(const char *, ...);
-
 static const char *gen_cb_args(u_int);
 static const char *gen_cb_args_proto(u_int);
 static struct xdict *get_or_create_event(char *);
 static int create_action(char *, const char *, const char *, struct xdict *,
     const char *, struct xdict *);
+void finalise_namespace(void);
+void setup_initial_namespace(void);
 
+/* From cfsm_lex.l */
 extern int yylex(void);
 
-extern char *in_path;
-extern u_int lnum;
-extern char *yytext;
+/* From cfsm.c */
+extern const char *in_path;
+extern const char *header_name;
 
-extern struct xarray *fsm_states_array;
-extern struct xarray *fsm_events_array;
-extern struct xarray *fsm_initial_states;
-extern struct xdict *fsm_namespace;
-extern struct xdict *fsm_states;
-extern struct xdict *fsm_events;
-extern struct xdict *fsm_event_callbacks;
-extern struct xdict *fsm_event_preconds;
-extern struct xdict *fsm_trans_entry_callbacks;
-extern struct xdict *fsm_trans_entry_preconds;
-extern struct xdict *fsm_trans_exit_callbacks;
-extern struct xdict *fsm_trans_exit_preconds;
+/* Local variables */
 
-struct xdict *current_state;
-struct xdict *current_event;
+/* Line number in input file */
+u_int lnum = 0;
 
-size_t banner_len = 0;
-char *tmp, *banner = NULL;
+/*
+ * The representation of the FSM that is built during parsing and
+ * subsequently used to fill in the template
+ */
+struct xdict *fsm_namespace = NULL;
+
+/* Convenience pointers to commonly-used objects in the namespace */
+static struct xarray *fsm_initial_states = NULL;
+static struct xarray *fsm_states_array = NULL;
+static struct xarray *fsm_events_array = NULL;
+static struct xdict *fsm_states = NULL;
+static struct xdict *fsm_events = NULL;
+static struct xdict *fsm_event_callbacks = NULL;
+static struct xdict *fsm_event_preconds = NULL;
+static struct xdict *fsm_trans_entry_callbacks = NULL;
+static struct xdict *fsm_trans_entry_preconds = NULL;
+static struct xdict *fsm_trans_exit_callbacks = NULL;
+static struct xdict *fsm_trans_exit_preconds = NULL;
+
+/* Pointers to active event or state */
+static struct xdict *current_state;
+static struct xdict *current_event;
+
+static size_t banner_len = 0;
+static char *banner = NULL;
 
 #define CB_ARG_CTX		(1)
 #define CB_ARG_EVENT		(1<<1)
@@ -551,4 +569,138 @@ create_action(char *name, const char *context, const char *block,
 		errx(1, "%s(%s): xdict_replace_si(%p, %s, 1) failed",
 		    __func__, context, main_list, name);
 	return 0;
+}
+
+void
+setup_initial_namespace(void)
+{
+	u_int i;
+	char *guard;
+
+#define DEF_STRING(k, v) do { \
+		if (xdict_insert_ss(fsm_namespace, k, v) != 0) \
+			errx(1, "Default set for \"%s\" failed", k); \
+	} while (0)
+#define DEF_DICT(k) do { \
+		if (xdict_insert_sd(fsm_namespace, k) != 0) \
+			errx(1, "Default set for \"%s\" failed", k); \
+	} while (0)
+#define DEF_ARRAY(k) do { \
+		if (xdict_insert_sa(fsm_namespace, k) != 0) \
+			errx(1, "Default set for \"%s\" failed", k); \
+	} while (0)
+#define DEF_GET(o, k, c) do { \
+		if ((o = (struct c *)xdict_item_s(fsm_namespace, k)) == NULL) \
+			errx(1, "Lookup for default \"%s\" failed", k); \
+	} while (0)
+
+	/* Set our defaults */
+	DEF_STRING("source_banner", "");
+	DEF_STRING("event_enum", DEFAULT_EVENT_ENUM);
+	DEF_STRING("state_enum", DEFAULT_STATE_ENUM);
+	DEF_STRING("fsm_struct", DEFAULT_FSM_STRUCT);
+	DEF_STRING("init_func", DEFAULT_INIT_FUNC);
+	DEF_STRING("free_func", DEFAULT_FREE_FUNC);
+	DEF_STRING("advance_func", DEFAULT_FREE_FUNC);
+	DEF_STRING("state_ntop_func", DEFAULT_STATE_NTOP_FUNC);
+	DEF_STRING("event_ntop_func", DEFAULT_EVENT_NTOP_FUNC);
+
+	DEF_STRING("event_precond_args", "");
+	DEF_STRING("event_precond_args_proto", "void");
+	DEF_STRING("trans_precond_args", "");
+	DEF_STRING("trans_precond_args_proto", "void");
+	DEF_STRING("event_cb_args", "");
+	DEF_STRING("event_cb_args_proto", "void");
+	DEF_STRING("trans_cb_args", "");
+	DEF_STRING("trans_cb_args_proto", "void");
+
+	DEF_ARRAY("events_array");
+	DEF_ARRAY("states_array");
+	DEF_ARRAY("initial_states");
+	DEF_DICT("states");
+	DEF_DICT("events");
+	DEF_DICT("event_callbacks");
+	DEF_DICT("event_preconds");
+	DEF_DICT("transition_entry_callbacks");
+	DEF_DICT("transition_exit_callbacks");
+	DEF_DICT("transition_entry_preconds");
+	DEF_DICT("transition_exit_preconds");
+
+	DEF_GET(fsm_states_array, "states_array", xarray);
+	DEF_GET(fsm_events_array, "events_array", xarray);
+	DEF_GET(fsm_initial_states, "initial_states", xarray);
+	DEF_GET(fsm_states, "states", xdict);
+	DEF_GET(fsm_events, "events", xdict);
+	DEF_GET(fsm_event_callbacks, "event_callbacks", xdict);
+	DEF_GET(fsm_event_preconds, "event_preconds", xdict);
+	DEF_GET(fsm_trans_entry_callbacks, "transition_entry_callbacks",xdict);
+	DEF_GET(fsm_trans_entry_preconds, "transition_entry_preconds", xdict);
+	DEF_GET(fsm_trans_exit_callbacks, "transition_exit_callbacks", xdict);
+	DEF_GET(fsm_trans_exit_preconds, "transition_exit_preconds", xdict);
+
+	if (header_name == NULL) {
+		DEF_STRING("header_guard", DEFAULT_HEADER_GUARD);
+		DEF_STRING("header_name", DEFAULT_HEADER);
+	} else {
+		if ((guard = malloc(strlen(header_name) + 2)) == NULL)
+			errx(1, "malloc failed");
+		guard[0] = '_';
+		for (i = 0; header_name[i] != '\0'; i++) {
+			if (isalnum(header_name[i]))
+				guard[i + 1] = toupper(header_name[i]);
+			else
+				guard[i + 1] = '_';
+		}
+		guard[i + 1] = '\0';
+		DEF_STRING("header_name", header_name);
+		DEF_STRING("header_guard", guard);
+		free(guard);
+	}
+}
+
+void
+finalise_namespace(void)
+{
+	size_t n;
+	struct xobject *tmp;
+
+	if ((n = xarray_len(fsm_initial_states)) == 0)
+		errx(1, "No initial state defined");
+	if (xdict_insert_si(fsm_namespace, "multiple_start_states",
+	    n > 1 ? 1 : 0) == -1)
+		errx(1, "xdict_insert_s failed");
+
+	if ((n = xarray_len(fsm_states_array)) == 0)
+		errx(1, "No states defined");
+	if (n == 1)
+		errx(1, "Only one state defined");
+
+	if ((tmp = xarray_item(fsm_states_array, 0)) == NULL)
+		errx(1, "xarray_item failed");
+	if ((tmp = xobject_deepcopy(tmp)) == NULL)
+		errx(1, "xobject_deepcopy failed");
+	if (xdict_insert_s(fsm_namespace, "min_state_valid", tmp) == -1)
+		errx(1, "xdict_insert_s failed");
+	if ((tmp = xarray_item(fsm_states_array, n - 1)) == NULL)
+		errx(1, "xarray_item failed");
+	if ((tmp = xobject_deepcopy(tmp)) == NULL)
+		errx(1, "xobject_deepcopy failed");
+	if (xdict_insert_s(fsm_namespace, "max_state_valid", tmp) == -1)
+		errx(1, "xdict_insert_s failed");
+
+	n = xarray_len(fsm_events_array);
+	if (n > 0) {
+		if ((tmp = xarray_item(fsm_events_array, 0)) == NULL)
+			errx(1, "xarray_item failed");
+		if ((tmp = xobject_deepcopy(tmp)) == NULL)
+			errx(1, "xobject_deepcopy failed");
+		if (xdict_insert_s(fsm_namespace, "min_event_valid", tmp) == -1)
+			errx(1, "xdict_insert_s failed");
+		if ((tmp = xarray_item(fsm_events_array, n - 1)) == NULL)
+			errx(1, "xarray_item failed");
+		if ((tmp = xobject_deepcopy(tmp)) == NULL)
+			errx(1, "xobject_deepcopy failed");
+		if (xdict_insert_s(fsm_namespace, "max_event_valid", tmp) == -1)
+			errx(1, "xdict_insert_s failed");
+	}
 }

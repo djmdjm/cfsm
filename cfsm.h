@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm.h,v 1.1 2007/04/15 06:31:41 djm Exp $ */
+/* $Id: cfsm.h,v 1.2 2007/04/15 08:45:58 djm Exp $ */
 
 #ifndef _CFSM_H
 #define _CFSM_H
@@ -24,7 +24,9 @@
 #define TEMPLATE_C_HEADER	"header.x"
 #define TEMPLATE_GRAPHVIZ	"graphviz.x"
 
-/* Default variable and function names */
+/* Default variable and function names, etc. */
+#define DEFAULT_HEADER		"fsm.h"
+#define DEFAULT_HEADER_GUARD	"_FSM_H"
 #define DEFAULT_EVENT_ENUM	"fsm_event"
 #define DEFAULT_STATE_ENUM	"fsm_state"
 #define DEFAULT_FSM_STRUCT	"fsm"
