@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_parse.y,v 1.6 2007/04/15 10:12:26 djm Exp $ */
+/* $Id: cfsm_parse.y,v 1.7 2007/04/15 12:24:42 djm Exp $ */
 
 %{
 #include <sys/types.h>
@@ -50,7 +50,7 @@ extern int yylex(void);
 
 /* From cfsm.c */
 extern const char *in_path;
-extern const char *header_name;
+extern char *header_name;
 
 /* Local variables */
 
@@ -274,6 +274,7 @@ state_decl:		STATE ID {
 		    xdict_insert_sd(current_state, "exit_callbacks") == -1 ||
 		    xdict_insert_sd(current_state, "entry_callbacks") == -1 ||
 		    xdict_insert_si(current_state, "is_initial", 0) == -1 ||
+		    xdict_insert_si(current_state, "indegree", 0) == -1 ||
 		    xarray_append_s(fsm_states_array, $2) == -1)
 			errx(1, "state_decl: set up state failed");
 		free($2);
@@ -329,7 +330,7 @@ next_state_def:		NEXT_STATE ID {
 	;
 
 on_event_def:		EVENT_ADVANCE ID MOVETO ID {
-		struct xdict *events;
+		struct xdict *events, *next_states;
 
 		if (current_state == NULL) {
 			yyerror("\"on-event\" outside state block");
@@ -347,6 +348,13 @@ on_event_def:		EVENT_ADVANCE ID MOVETO ID {
 			errx(1, "on_event_def: state lacks events");
 		if (xdict_replace_ss(events, $4, $2) == -1)
 			errx(1, "on_event_def: xdict_replace_ss failed");
+
+		if ((next_states = (struct xdict *)xdict_item_s(current_state,
+		    "next_states")) == NULL)
+			errx(1, "on_event_def: state lacks next_states");
+		if (xdict_replace_si(next_states, $4, 1) == -1)
+			errx(1, "on_event_def: xdict_replace_si failed");
+
 		free($2);
 		free($4);
 	}
@@ -624,6 +632,9 @@ setup_initial_namespace(void)
 			errx(1, "Lookup for default \"%s\" failed", k); \
 	} while (0)
 
+	if ((fsm_namespace = xdict_new()) == NULL)
+		errx(1, "%s(%d): xdict_new failed", __func__, __LINE__);
+
 	/* Set our defaults */
 	DEF_STRING("source_banner", "");
 	DEF_STRING("event_enum", DEFAULT_EVENT_ENUM);
@@ -693,72 +704,139 @@ finalise_namespace(void)
 {
 	size_t n;
 	struct xobject *tmp;
+	struct xiterator *siter, *niter;
+	struct xiteritem *sitem, *nitem;
+	const char *state, *next_state;
+	int64_t indegree;
 
-	if ((n = xarray_len(fsm_initial_states)) == 0)
-		errx(1, "No initial state defined");
-	if (xdict_insert_si(fsm_namespace, "multiple_start_states",
-	    n > 1 ? 1 : 0) == -1)
-		errx(1, "xdict_insert_s failed");
-
+	/* Make sure we have at least two states */
 	if ((n = xarray_len(fsm_states_array)) == 0)
 		errx(1, "No states defined");
 	if (n == 1)
 		errx(1, "Only one state defined");
 
+	/* Set min and max valid states */
 	if ((tmp = xarray_item(fsm_states_array, 0)) == NULL)
-		errx(1, "xarray_item failed");
+		errx(1, "%s(%d): xarray_item", __func__, __LINE__);
 	if ((tmp = xobject_deepcopy(tmp)) == NULL)
-		errx(1, "xobject_deepcopy failed");
+		errx(1, "%s(%d): xobject_deepcopy", __func__, __LINE__);
 	if (xdict_insert_s(fsm_namespace, "min_state_valid", tmp) == -1)
-		errx(1, "xdict_insert_s failed");
+		errx(1, "%s(%d): xdict_insert_s", __func__, __LINE__);
 	if ((tmp = xarray_item(fsm_states_array, n - 1)) == NULL)
-		errx(1, "xarray_item failed");
+		errx(1, "%s(%d): xarray_item", __func__, __LINE__);
 	if ((tmp = xobject_deepcopy(tmp)) == NULL)
-		errx(1, "xobject_deepcopy failed");
+		errx(1, "%s(%d): xobject_deepcopy", __func__, __LINE__);
 	if (xdict_insert_s(fsm_namespace, "max_state_valid", tmp) == -1)
-		errx(1, "xdict_insert_s failed");
+		errx(1, "%s(%d): xdict_insert_s", __func__, __LINE__);
 
+	/* Set flag for multiple initial states */
+	if ((n = xarray_len(fsm_initial_states)) == 0)
+		errx(1, "No initial state defined");
+	if (xdict_insert_si(fsm_namespace, "multiple_start_states",
+	    n > 1 ? 1 : 0) == -1)
+		errx(1, "%s(%d): xdict_insert_s", __func__, __LINE__);
+
+	/* If FSM is event-driven, set min and max valid events */
 	n = xarray_len(fsm_events_array);
 	if (n > 0) {
 		if ((tmp = xarray_item(fsm_events_array, 0)) == NULL)
-			errx(1, "xarray_item failed");
+			errx(1, "%s(%d): xarray_item", __func__, __LINE__);
 		if ((tmp = xobject_deepcopy(tmp)) == NULL)
-			errx(1, "xobject_deepcopy failed");
+			errx(1, "%s(%d): xobject_deepcopy", __func__, __LINE__);
 		if (xdict_insert_s(fsm_namespace, "min_event_valid", tmp) == -1)
-			errx(1, "xdict_insert_s failed");
+			errx(1, "%s(%d): xdict_insert_s", __func__, __LINE__);
 		if ((tmp = xarray_item(fsm_events_array, n - 1)) == NULL)
-			errx(1, "xarray_item failed");
+			errx(1, "%s(%d): xarray_item", __func__, __LINE__);
 		if ((tmp = xobject_deepcopy(tmp)) == NULL)
-			errx(1, "xobject_deepcopy failed");
+			errx(1, "%s(%d): xobject_deepcopy", __func__, __LINE__);
 		if (xdict_insert_s(fsm_namespace, "max_event_valid", tmp) == -1)
-			errx(1, "xdict_insert_s failed");
+			errx(1, "%s(%d): xdict_insert_s", __func__, __LINE__);
 	}
 
+	/* Set callback and precondition arguments and prototype signatures */
 	if (xdict_replace_ss(fsm_namespace, "event_precond_args",
 	    gen_cb_args(event_precond_args)) == -1)
-		errx(1, "event_precond_arg_def: xdict_replace_ss");
+		errx(1, "%s(%d): xdict_replace_ss", __func__, __LINE__);
 	if (xdict_replace_ss(fsm_namespace, "event_precond_args_proto",
 	    gen_cb_args_proto(event_precond_args)) == -1)
-		errx(1, "event_precond_arg_def: xdict_replace_ss");
+		errx(1, "%s(%d): xdict_replace_ss", __func__, __LINE__);
 
 	if (xdict_replace_ss(fsm_namespace, "trans_precond_args",
 	    gen_cb_args(trans_precond_args)) == -1)
-		errx(1, "trans_precond_arg_def: xdict_replace_ss");
+		errx(1, "%s(%d): xdict_replace_ss", __func__, __LINE__);
 	if (xdict_replace_ss(fsm_namespace, "trans_precond_args_proto",
 	    gen_cb_args_proto(trans_precond_args)) == -1)
-		errx(1, "trans_precond_arg_def: xdict_replace_ss");
+		errx(1, "%s(%d): xdict_replace_ss", __func__, __LINE__);
 
 	if (xdict_replace_ss(fsm_namespace, "event_cb_args",
 	    gen_cb_args(event_callback_args)) == -1)
-		errx(1, "event_callback_arg_def: xdict_replace_ss");
+		errx(1, "%s(%d): xdict_replace_ss", __func__, __LINE__);
 	if (xdict_replace_ss(fsm_namespace, "event_cb_args_proto",
 	    gen_cb_args_proto(event_callback_args)) == -1)
-		errx(1, "event_callback_arg_def: xdict_replace_ss");
+		errx(1, "%s(%d): xdict_replace_ss", __func__, __LINE__);
 
 	if (xdict_replace_ss(fsm_namespace, "trans_cb_args",
 	    gen_cb_args(trans_callback_args)) == -1)
-		errx(1, "trans_callback_arg_def: xdict_replace_ss");
+		errx(1, "%s(%d): xdict_replace_ss", __func__, __LINE__);
 	if (xdict_replace_ss(fsm_namespace, "trans_cb_args_proto",
 	    gen_cb_args_proto(trans_callback_args)) == -1)
-		errx(1, "trans_callback_arg_def: xdict_replace_ss");
+		errx(1, "%s(%d): xdict_replace_ss", __func__, __LINE__);
+
+	/*
+	 * Walk next_states and update each state's indegree, checking
+	 * for nonexistent next-states.
+	 */
+	if ((siter = xobject_getiter((struct xobject *)fsm_states)) == NULL)
+		errx(1, "%s(%d): xobject_getiter", __func__, __LINE__);
+	while ((sitem = xiterator_next(siter)) != NULL) {
+		if ((state = xstring_ptr((struct xstring *)sitem->key)) == NULL)
+			errx(1, "%s(%d): fsm_states returned NULL key",
+			    __func__, __LINE__);
+		if ((tmp = xdict_item_s((struct xdict *)sitem->value,
+		    "next_states")) == NULL)
+			errx(1, "%s(%d): xdict_item_s", __func__, __LINE__);
+		if ((niter = xobject_getiter(tmp)) == NULL)
+			errx(1, "%s(%d): xobject_getiter", __func__, __LINE__);
+		while ((nitem = xiterator_next(niter)) != NULL) {
+			if ((next_state = xstring_ptr((struct xstring *)
+			    nitem->key)) == NULL)
+				errx(1, "%s(%d): %s.next_states returned "
+				    "NULL key", __func__, __LINE__, state);
+			if ((tmp = xdict_item(fsm_states,
+			    (struct xstring *)nitem->key)) == NULL)
+				errx(1, "State \"%s\" references non-existent "
+				    "next state \"%s\"", state, next_state);
+			if ((tmp = xdict_item_s((struct xdict *)tmp,
+			    "indegree")) == NULL)
+				errx(1, "State \"%s\" lacks indegree",
+				    next_state);
+			if (xint_add((struct xint *)tmp, 1) != 0)
+				errx(1, "%s(%d): %s xint_add", __func__,
+				    __LINE__, next_state);
+		}
+		xiterator_free(niter);
+	}
+	xiterator_free(siter);
+
+	/* Now look for unreachable (indegree == ) states */
+	if ((siter = xobject_getiter((struct xobject *)fsm_states)) == NULL)
+		errx(1, "%s(%d): xobject_getiter", __func__, __LINE__);
+	while ((sitem = xiterator_next(siter)) != NULL) {
+		if ((state = xstring_ptr((struct xstring *)sitem->key)) == NULL)
+			errx(1, "%s(%d): fsm_states returned NULL key",
+			    __func__, __LINE__);
+		if ((tmp = xdict_item_s((struct xdict *)sitem->value,
+		    "indegree")) == NULL)
+			errx(1, "State \"%s\" lacks indegree", state);
+		indegree = xint_value((struct xint *)tmp);
+		if (indegree > 0)
+			continue;
+		if ((tmp = xdict_item_s((struct xdict *)sitem->value,
+		    "is_initial")) == NULL)
+			errx(1, "State \"%s\" lacks indegree", state);
+		if (xint_value((struct xint *)tmp) != 1)
+			errx(1, "State \"%s\" is unreachable", state);
+	}
+	xiterator_free(siter);
+
 }

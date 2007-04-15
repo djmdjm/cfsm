@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm.h,v 1.2 2007/04/15 08:45:58 djm Exp $ */
+/* $Id: cfsm.h,v 1.3 2007/04/15 12:24:42 djm Exp $ */
 
 #ifndef _CFSM_H
 #define _CFSM_H
@@ -23,6 +23,11 @@
 #define TEMPLATE_C_SOURCE	"source.x"
 #define TEMPLATE_C_HEADER	"header.x"
 #define TEMPLATE_GRAPHVIZ	"graphviz.x"
+
+/* Default output file names */
+#define DEFAULT_OUT_DOT		"fsm.dot"
+#define DEFAULT_OUT_C_SRC	"fsm.c"
+#define DEFAULT_OUT_C_HDR	"fsm.h"
 
 /* Default variable and function names, etc. */
 #define DEFAULT_HEADER		"fsm.h"
