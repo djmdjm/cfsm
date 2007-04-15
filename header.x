@@ -21,7 +21,6 @@ struct {{fsm_struct}};
 enum {{state_enum}} {
 {{for state in states}}	{{state.key}},
 {{endfor}}};
-
 {{if events}}
 /*
  * Events that may cause state transitions in the FSM
@@ -30,7 +29,6 @@ enum {{event_enum}} {
 {{for event in events}}	{{event.key}},
 {{endfor}}};
 {{endif}}
-
 /*
  * Possible error return values
  */
@@ -58,19 +56,17 @@ struct {{fsm_struct}} *{{init_func}}(enum {{state_enum}} initial_state,
  */
 struct {{fsm_struct}} *{{init_func}}(char *errbuf, size_t errlen);
 {{endif}}
-
 /*
  * Free a FSM created with %(init_func)s()
  */
 void {{free_func}}(struct {{fsm_struct}} *fsm);
-
 {{if events}}
 /*
  * Execute a pre-defined event on the FSM that may trigger a transition.
 {{if need_ctx}} * The "ctx" argument is a caller-specified context pointer that
  * may be used to pass additional state to precondition, event and transition
  * callback functions.
-{{endif}}
+ *{{endif}}
  * Will return CFSM_OK on success or one of the CFSM_ERR_* codes on failure.
  * If "errbuf" is not NULL, upto "errlen" bytes of error message will be 
  * copied into "errbuf" on failure.
@@ -82,21 +78,21 @@ int {{advance_func}}(struct {{fsm_struct}} *fsm, enum {{event_enum}} ev,
  * Convert from the %(event_enum)s enumeration to a string. Will return
  * NULL if the event is not known.
  */
-const char *{{event_ntop}}(enum {{event_enum}});
+const char *{{event_ntop_func}}(enum {{event_enum}});
 
 /*
  * "Safe" version of %(event_enum_to_string_func)s. Will return the string
  * "[INVALID]" if the event is not known, so it can be used directly
  * in printf() statements, etc.
  */
-const char *{{event_ntop}}_safe(enum {{event_enum}});
+const char *{{event_ntop_func}}_safe(enum {{event_enum}});
 {{else}}
 /*
  * Attempt to advance to the state specified by "new_state".
 {{if need_ctx}} * The "ctx" argument is a caller-specified context pointer that
  * may be used to pass additional state to precondition, event and transition
  * callback functions.
-{{endif}}
+ *{{endif}}
  * Will return CFSM_OK on success or one of the CFSM_ERR_* codes on failure.
  * If "errbuf" is not NULL, upto "errlen" bytes of error message will be 
  * copied into "errbuf" on failure.
@@ -104,7 +100,6 @@ const char *{{event_ntop}}_safe(enum {{event_enum}});
 int {{advance_func}}(struct {{fsm_struct}} *fsm, enum {{state_enum}} new_state,
     {{if need_ctx}}void *ctx, {{endif}}char *errbuf, size_t errlen);
 {{endif}}
-
 /*
  * Convert from the {{state_enum}} enumeration to a string. Will return
  * NULL if the state is not known.
@@ -123,4 +118,4 @@ const char *{{state_ntop_func}}_safe(enum {{state_enum}} n);
  */
 enum {{state_enum}} {{current_state_func}}(struct {{fsm_struct}} *fsm);
 
-#endif /* {{guard}} */
+#endif /* {{header_guard}} */

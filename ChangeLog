@@ -4,6 +4,7 @@
    that output is still incomplete and buggy.
  - (djm) Lots of work on the C source template, still incomplete but much
    closer now
+ - (djm) Bugfix and spacing tweaks for the header
 
 20070408
  - (djm) Extract C source and header from cfsm and factor it into templates
@@ -49,4 +50,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.15 2007/04/15 06:17:24 djm Exp $
+$Id: ChangeLog,v 1.16 2007/04/15 06:58:11 djm Exp $
