@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm.c,v 1.5 2007/04/15 13:54:58 djm Exp $ */
+/* $Id: cfsm.c,v 1.6 2007/04/15 22:58:19 djm Exp $ */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -111,11 +111,12 @@ usage(void)
 	fprintf(stderr,
 "Usage: cfsm [-h] [-HCD] [-o output-file] fsm-file\n"
 "Command line options:\n"
-"    -h              Display this help\n"
-"    -d              Generate C header file in addition to source file\n"
-"    -D              Only generate C header file (and not a source file)\n"
-"    -g              Generate graphviz dot file instead of C source/header\n"
-"    -o output_file  Specify output file (default: fsm.[c|h|dot])\n");
+"    -h               Display this help\n"
+"    -d               Generate C header file in addition to source file\n"
+"    -D               Only generate C header file (and not a source file)\n"
+"    -g               Generate graphviz dot file instead of C source/header\n"
+"    -m template_file \"Manual\" output mode using user-supplied template\n"
+"    -o output_file   Specify output file (default: fsm.[c|h|dot])\n");
 }
 
 int
@@ -124,11 +125,11 @@ main(int argc, char **argv)
 	extern char *optarg;
 	extern int optind;
 	int ch;
-	const char *out_arg = NULL, *out;
+	const char *manual_arg = NULL, *out_arg = NULL, *out;
 	int output_dot = 0, output_header = 0, output_src = 1;
 	size_t len;
 
-	while ((ch = getopt(argc, argv, "Dhdgo:")) != -1) {
+	while ((ch = getopt(argc, argv, "Dhdgm:o:")) != -1) {
 		switch (ch) {
 		case 'h':
 			usage();
@@ -143,6 +144,10 @@ main(int argc, char **argv)
 		case 'g':
 			output_src = 0;
 			output_dot = 1;
+			break;
+		case 'm':
+			output_src = 0;
+			manual_arg = optarg;
 			break;
 		case 'o':
 			out_arg = optarg;
@@ -163,8 +168,14 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	if (output_dot && output_header) {
-		warnx("Cannot output Graphviz dot and header simultaneously");
+	if (output_dot + output_header + (manual_arg != NULL ? 1 : 0) > 1) {
+		warnx("Please select only one of -D, -g and -m");
+		usage();
+		exit(1);
+	}
+
+	if (manual_arg != NULL && out_arg == NULL) {
+		warnx("An output path (-o) must be specified in manual mode");
 		usage();
 		exit(1);
 	}
@@ -222,6 +233,12 @@ main(int argc, char **argv)
 			out = out_arg == NULL ? DEFAULT_OUT_C_HDR : out_arg;
 		warnx("Writing C header to \"%s\"", out);
 		render_template(TEMPLATE_C_HEADER, out);
+	}
+
+	if (manual_arg != NULL) {
+		warnx("Rendering template \"%s\" to \"%s\"",
+		    manual_arg, out_arg);
+		render_template(manual_arg, out_arg);
 	}
 
 	if (header_name != NULL)

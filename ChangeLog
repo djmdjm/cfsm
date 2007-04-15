@@ -1,4 +1,7 @@
-20070408
+20070416
+ - (djm) Add a "manual mode" where the user can specify their own template
+
+20070415
  - (djm) Flesh out C implementation some more, fix some parser and
    template bugs. Now at the point where it will generate output, but
    that output is still incomplete and buggy.
@@ -61,4 +64,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.21 2007/04/15 14:17:34 djm Exp $
+$Id: ChangeLog,v 1.22 2007/04/15 22:58:19 djm Exp $
