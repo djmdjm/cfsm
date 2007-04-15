@@ -22,9 +22,9 @@ RANLIB=ranlib
 LEX=lex
 YACC=yacc
 
-all: cfsm_xxx
+all: cfsm
 
-cfsm_xxx: cfsm.o cfsm_parse.o cfsm_lex.o strlcat.o
+cfsm: cfsm.o cfsm_parse.o cfsm_lex.o strlcat.o
 	$(CC) -o $@ cfsm.o cfsm_parse.o cfsm_lex.o strlcat.o $(LDFLAGS) $(LIBS)
 
 cfsm_lex.o: cfsm_parse.h

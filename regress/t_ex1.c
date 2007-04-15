@@ -3,7 +3,7 @@
  * Damien Miller 2007-02-09
  */
 
-/* $Id: t_ex1.c,v 1.4 2007/03/26 03:22:24 djm Exp $ */
+/* $Id: t_ex1.c,v 1.5 2007/04/15 13:54:58 djm Exp $ */
 
 #include <sys/types.h>
 
@@ -61,7 +61,7 @@ int b_ready(enum myevent ev, enum mystate new, void *ctx)
 	assert(ev == A_DONE || ev == F_DONE2);
 	assert(new == STATE_B);
 	assert(ctx == &a_finished_called);
-	return b_ready_called++ > 0 ? 0 : -1;
+	return (b_ready_called++ > 0) ? 0 : -1;
 }
 
 int a_finished(enum myevent ev, enum mystate new, void *ctx)
@@ -69,7 +69,7 @@ int a_finished(enum myevent ev, enum mystate new, void *ctx)
 	assert(ev == A_DONE);
 	assert(new == STATE_B);
 	assert(ctx == &a_finished_called);
-	return a_finished_called++ > 0 ? 0 : -1;
+	return (a_finished_called++ > 0) ? 0 : -1;
 }
 
 int b_finished(enum myevent ev, enum mystate new, void *ctx)
@@ -77,7 +77,7 @@ int b_finished(enum myevent ev, enum mystate new, void *ctx)
 	assert(ev == B_DONE1 || ev == B_DONE2);
 	assert(new == STATE_C1 || new == STATE_C2);
 	assert(ctx == &a_finished_called);
-	return b_finished_called++ > 0 ? 0 : -1;
+	return (b_finished_called++ > 0) ? 0 : -1;
 }
 
 int a_ready(enum myevent ev, enum mystate new, void *ctx)
@@ -85,7 +85,7 @@ int a_ready(enum myevent ev, enum mystate new, void *ctx)
 	assert(ev == G_DONE1);
 	assert(new == STATE_A);
 	assert(ctx == &a_finished_called);
-	return a_ready_called++ > 0 ? 0 : -1;
+	return (a_ready_called++ > 0) ? 0 : -1;
 }
 
 void g_done1_callback(enum myevent ev, void *ctx)
@@ -109,7 +109,7 @@ int a_done_precondition(enum myevent ev, enum mystate old,
 	assert(old == STATE_A);
 	assert(new == STATE_B);
 	assert(ctx == &a_finished_called);
-	return a_done_precondition_called++ > 0 ? 0 : -1;
+	return (a_done_precondition_called++ > 0) ? 0 : -1;
 }
 
 int f_done1_precondition(enum myevent ev, enum mystate old,
@@ -119,7 +119,7 @@ int f_done1_precondition(enum myevent ev, enum mystate old,
 	assert(old == STATE_F);
 	assert(new == STATE_G);
 	assert(ctx == &a_finished_called);
-	return f_done1_precondition_called++ > 0 ? 0 : -1;
+	return (f_done1_precondition_called++ > 0) ? 0 : -1;
 }
 
 int

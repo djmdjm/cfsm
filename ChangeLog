@@ -10,6 +10,11 @@
  - (djm) Detect attempts to use next-state in event-driven FSMs
  - (djm) Make the output file handling more yacc-like: output only a C source
    file by default, but include an option to output a header or a dot file
+ - (djm) Fix more bugs in cfsm.c relating to output name handling
+ - (djm) Fix more bugs in the templates and default function names
+ - (djm) Adjust the regress tests to use the new default function names
+ - (djm) The C-based cfsm is now fully functional and passes all regress
+   tests. Remove the old Python implementation (it is still in the CVS attic)
 
 20070408
  - (djm) Extract C source and header from cfsm and factor it into templates
@@ -55,4 +60,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.19 2007/04/15 12:24:41 djm Exp $
+$Id: ChangeLog,v 1.20 2007/04/15 13:54:57 djm Exp $

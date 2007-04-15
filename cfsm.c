@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm.c,v 1.4 2007/04/15 12:24:42 djm Exp $ */
+/* $Id: cfsm.c,v 1.5 2007/04/15 13:54:58 djm Exp $ */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -86,18 +86,18 @@ read_template(const char *template_path)
 }
 
 static void
-render_template(const char *template_path, const char *out_path)
+render_template(const char *template_path, const char *out_arg)
 {
 	char err_buf[1024];
 	FILE *out_file = NULL;
 	struct xtemplate *tmpl;
 
 	tmpl = read_template(template_path);
-	if (strcmp(out_path, "-") == 0) {
+	if (strcmp(out_arg, "-") == 0) {
 		out_file = stdout;
-		out_path = "(stdout)";
-	} else if ((out_file = fopen(out_path, "w")) == NULL)
-		err(1, "fopen(\"%s\", \"w\")", out_path);
+		out_arg = "(stdout)";
+	} else if ((out_file = fopen(out_arg, "w")) == NULL)
+		err(1, "fopen(\"%s\", \"w\")", out_arg);
 	if (xtemplate_run(tmpl, fsm_namespace, out_file,
 		err_buf, sizeof(err_buf)) == -1)
 		errx(1, "xtemplate_run: %s", err_buf);
@@ -124,7 +124,7 @@ main(int argc, char **argv)
 	extern char *optarg;
 	extern int optind;
 	int ch;
-	const char *out_path = NULL;
+	const char *out_arg = NULL, *out;
 	int output_dot = 0, output_header = 0, output_src = 1;
 	size_t len;
 
@@ -145,7 +145,7 @@ main(int argc, char **argv)
 			output_dot = 1;
 			break;
 		case 'o':
-			out_path = optarg;
+			out_arg = optarg;
 			break;
 		default:
 			warnx("Unrecognised command line option");
@@ -169,8 +169,8 @@ main(int argc, char **argv)
 		exit(1);
 	}
 
-	if (output_src && output_header && out_path != NULL &&
-	    strcmp(out_path, "-") == 0) {
+	if (output_src && output_header && out_arg != NULL &&
+	    strcmp(out_arg, "-") == 0) {
 		warnx("Cannot specify stdout output when generating both C "
 		    "source and header");
 		usage();
@@ -178,9 +178,9 @@ main(int argc, char **argv)
 	}
 
 	/* Synthesise a header path from the source path */
-	if (output_src && (len = strlen(out_path)) >= 2) {
-		if (strcmp(out_path + len - 2, ".c") == 0) {
-			if ((header_name = strdup(out_path)) == NULL)
+	if (output_src && out_arg != NULL && (len = strlen(out_arg)) >= 2) {
+		if (strcmp(out_arg + len - 2, ".c") == 0) {
+			if ((header_name = strdup(out_arg)) == NULL)
 				errx(1, "strdup");
 			header_name[len - 1] = 'h';
 		}
@@ -204,22 +204,24 @@ main(int argc, char **argv)
 	finalise_namespace();
 
 	if (output_dot) {
-		if (out_path == NULL)
-			out_path = DEFAULT_OUT_DOT;
-		render_template(TEMPLATE_GRAPHVIZ, out_path);
+		out = out_arg == NULL ? DEFAULT_OUT_DOT : out_arg;
+		warnx("Writing Graphviz dot to \"%s\"", out);
+		render_template(TEMPLATE_GRAPHVIZ, out);
 	}
 
 	if (output_src) {
-		if (out_path == NULL)
-			out_path = DEFAULT_OUT_C_SRC;
-		render_template(TEMPLATE_C_SOURCE, out_path);
+		out = out_arg == NULL ? DEFAULT_OUT_C_SRC : out_arg;
+		warnx("Writing C source to \"%s\"", out);
+		render_template(TEMPLATE_C_SOURCE, out);
 	}
 
 	if (output_header) {
-		if (out_path == NULL)
-			out_path = header_name == NULL ?
-			    DEFAULT_OUT_C_HDR : header_name;
-		render_template(TEMPLATE_C_HEADER, out_path);
+		if (header_name != NULL)
+			out = header_name;
+		else
+			out = out_arg == NULL ? DEFAULT_OUT_C_HDR : out_arg;
+		warnx("Writing C header to \"%s\"", out);
+		render_template(TEMPLATE_C_HEADER, out);
 	}
 
 	if (header_name != NULL)

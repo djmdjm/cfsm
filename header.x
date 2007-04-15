@@ -47,7 +47,7 @@ enum {{event_enum}} {
  * error message will be copied into "errbuf" on failure.
  */
 struct {{fsm_struct}} *{{init_func}}(enum {{state_enum}} initial_state,
-    char *errbuf, size_t errlen);"""
+    char *errbuf, size_t errlen);
 {{else}}/*
  * Allocate a new FSM and set its starting state to {{initial_states[0]}}
  * Will return a pointer to the opaque FSM structure on success or 

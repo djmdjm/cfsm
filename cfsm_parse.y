@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_parse.y,v 1.7 2007/04/15 12:24:42 djm Exp $ */
+/* $Id: cfsm_parse.y,v 1.8 2007/04/15 13:54:58 djm Exp $ */
 
 %{
 #include <sys/types.h>
@@ -346,7 +346,7 @@ on_event_def:		EVENT_ADVANCE ID MOVETO ID {
 		if ((events = (struct xdict *)xdict_item_s(current_state,
 		    "events")) == NULL)
 			errx(1, "on_event_def: state lacks events");
-		if (xdict_replace_ss(events, $4, $2) == -1)
+		if (xdict_replace_ss(events, $2, $4) == -1)
 			errx(1, "on_event_def: xdict_replace_ss failed");
 
 		if ((next_states = (struct xdict *)xdict_item_s(current_state,
@@ -515,7 +515,7 @@ gen_cb_args(u_int argdef)
 	if ((argdef & CB_ARG_EVENT) != 0)
 		commacat(buf, "ev", sizeof(buf));
 	if ((argdef & CB_ARG_OLD_STATE) != 0)
-		commacat(buf, "fsm->current_state", sizeof(buf));
+		commacat(buf, "old_state", sizeof(buf));
 	if ((argdef & CB_ARG_NEW_STATE) != 0)
 		commacat(buf, "new_state", sizeof(buf));
 	if ((argdef & CB_ARG_CTX) != 0)
@@ -642,9 +642,10 @@ setup_initial_namespace(void)
 	DEF_STRING("fsm_struct", DEFAULT_FSM_STRUCT);
 	DEF_STRING("init_func", DEFAULT_INIT_FUNC);
 	DEF_STRING("free_func", DEFAULT_FREE_FUNC);
-	DEF_STRING("advance_func", DEFAULT_FREE_FUNC);
+	DEF_STRING("advance_func", DEFAULT_ADVANCE_FUNC);
 	DEF_STRING("state_ntop_func", DEFAULT_STATE_NTOP_FUNC);
 	DEF_STRING("event_ntop_func", DEFAULT_EVENT_NTOP_FUNC);
+	DEF_STRING("current_state_func", DEFAULT_CURRENT_STATE_FUNC);
 
 	DEF_STRING("event_precond_args", "");
 	DEF_STRING("event_precond_args_proto", "void");
@@ -678,6 +679,9 @@ setup_initial_namespace(void)
 	DEF_GET(fsm_trans_entry_preconds, "transition_entry_preconds", xdict);
 	DEF_GET(fsm_trans_exit_callbacks, "transition_exit_callbacks", xdict);
 	DEF_GET(fsm_trans_exit_preconds, "transition_exit_preconds", xdict);
+
+	if (xdict_insert_si(fsm_namespace, "need_ctx", 0) == -1)
+		errx(1, "Default set for \"need_ctx\" failed");
 
 	if (header_name == NULL) {
 		DEF_STRING("header_guard", DEFAULT_HEADER_GUARD);

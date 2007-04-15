@@ -24,16 +24,16 @@ struct {{fsm_struct}} {
 {{for cb in transition_exit_callbacks}}void {{cb.key}}({{trans_cb_args_proto}});
 {{endfor}}
 {{endif}}{{if transition_entry_preconds}}/* Prototypes for state entry precondition checks */
-{{for cb in transition_entry_preconds}}void {{cb.key}}({{trans_precond_args_proto}});
+{{for cb in transition_entry_preconds}}int {{cb.key}}({{trans_precond_args_proto}});
 {{endfor}}
 {{endif}}{{if transition_exit_preconds}}/* Prototypes for state exit precondition checks */
-{{for cb in transition_exit_preconds}}void {{cb.key}}({{trans_precond_args_proto}});
+{{for cb in transition_exit_preconds}}int {{cb.key}}({{trans_precond_args_proto}});
 {{endfor}}
 {{endif}}{{if event_callbacks}}/* Prototypes for event callback functions */
 {{for cb in event_callbacks}}void {{cb.key}}({{event_cb_args_proto}});
 {{endfor}}
 {{endif}}{{if event_preconds}}/* Prototypes for event precondition checks */
-{{for cb in event_preconds}}void {{cb.key}}({{event_precond_args_proto}});
+{{for cb in event_preconds}}int {{cb.key}}({{event_precond_args_proto}});
 {{endfor}}
 {{endif}}static int
 _is_{{state_enum}}_valid(enum {{state_enum}} n)
@@ -66,7 +66,7 @@ const char *
 static int
 _is_{{event_enum}}_valid(enum {{event_enum}} n)
 {
-	if (!(n >= {{min_event_valid}} && n <= {{max_event_valid}})
+	if (!(n >= {{min_event_valid}} && n <= {{max_event_valid}}))
 		return -1;
 	return 0;
 }
@@ -147,7 +147,7 @@ enum {{state_enum}}
 {{else}}int {{advance_func}}(struct {{fsm_struct}} *fsm, enum {{state_enum}} new_state,
     {{if need_ctx}}void *ctx, {{endif}}char *errbuf, size_t errlen)
 {{endif}}{
-	enum {{state_enum}} old_state;
+	enum {{state_enum}} old_state = fsm->current_state;
 {{if events}}	enum {{state_enum}} new_state;
 {{endif}}
 	/* Sanity check states */
@@ -172,7 +172,7 @@ enum {{state_enum}}
 	}{{endif}}
 
 {{if events}}	/* Event validity checks */
-	switch(fsm->current_state) {
+	switch(old_state) {
 {{for state in states}}	case {{state.key}}:
 		switch (ev) {
 {{for event in state.value.events}}		case {{event.key}}:
@@ -181,9 +181,10 @@ enum {{state_enum}}
 {{endfor}}		default:
 			goto bad_event;
 		}
+		break;
 {{endfor}}
 	}{{else}}	/* Transition checks */
-	switch(fsm->current_state) {
+	switch(old_state) {
 {{for state in states}}	case {{state.key}}:
 		switch (new_state) {
 {{for next_state in state.value.next_states}}		case {{next_state.key}}:
@@ -191,13 +192,14 @@ enum {{state_enum}}
 		default:
 			goto bad_transition;
 		}
+		break;
 {{endfor}}
 	}{{endif}}
 {{if event_preconds}}
 	/* Event preconditions */
 	switch(ev) {
 {{for event in events}}{{if event.value.preconds}}	case {{event.key}}:
-{{for precond in event.value.preconds}}		if ({{precond.key}}({{event_precond_args}}) == -1)
+{{for precond in event.value.preconds}}		if ({{precond.key}}({{event_precond_args}}) != 0)
 			goto event_precond_fail;
 {{endfor}}		break;
 {{endif}}{{endfor}}	default:
@@ -205,9 +207,9 @@ enum {{state_enum}}
 	}
 {{endif}}{{if transition_exit_preconds}}
 	/* Current state exit preconditions */
-	switch(fsm->current_state) {
+	switch(old_state) {
 {{for state in states}}{{if state.value.exit_preconds}}	case {{state.key}}:
-{{for precond in state.value.exit_preconds}}		if ({{precond.key}}({{trans_precond_args}}) == -1)
+{{for precond in state.value.exit_preconds}}		if ({{precond.key}}({{trans_precond_args}}) != 0)
 			goto exit_precond_fail;
 {{endfor}}		break;
 {{endif}}{{endfor}}	default:
@@ -217,7 +219,7 @@ enum {{state_enum}}
 	/* Next state entry preconditions */
 	switch(new_state) {
 {{for state in states}}{{if state.value.entry_preconds}}	case {{state.key}}:
-{{for precond in state.value.entry_preconds}}		if ({{precond.key}}({{trans_precond_args}}) == -1)
+{{for precond in state.value.entry_preconds}}		if ({{precond.key}}({{trans_precond_args}}) != 0)
 			goto entry_precond_fail;
 {{endfor}}			break;
 {{endif}}{{endfor}}	default:
@@ -234,54 +236,53 @@ enum {{state_enum}}
 	}
 {{endif}}{{if transition_exit_callbacks}}
 	/* Current state exit callbacks */
-	switch(ev) {
+	switch(old_state) {
 {{for state in states}}{{if state.value.exit_callbacks}}	case {{state.key}}:
 {{for cb in state.value.exit_callbacks}}		{{cb.key}}({{trans_cb_args}});
 {{endfor}}			break;
 {{endif}}{{endfor}}	default:
 		break;
-	}{{endif}}
-
+	}
+{{endif}}
 	/* Switch state now */
-	old_state = fsm->current_state;
 	fsm->current_state = new_state;
 {{if transition_entry_callbacks}}
 	/* New state entry callbacks */
-	switch(ev) {
+	switch(new_state) {
 {{for state in states}}{{if state.value.entry_callbacks}}	case {{state.key}}:
 {{for cb in state.value.entry_callbacks}}		{{cb.key}}({{trans_cb_args}});
 {{endfor}}		break;
 {{endif}}{{endfor}}	default:
 		break;
-	}{{endif}}
-
+	}
+{{endif}}
 	return CFSM_OK;
-
-{{if transition_entry_preconds}} entry_precond_fail:
+{{if transition_entry_preconds}}
+ entry_precond_fail:
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "State %s entry precondition not satisfied",
 		    {{state_ntop_func}}_safe(new_state));
 	}
 	return CFSM_ERR_PRECONDITION;
-{{endif}}
-{{if transition_exit_preconds}} exit_precond_fail:
+{{endif}}{{if transition_exit_preconds}}
+ exit_precond_fail:
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "State %s exit precondition not satisfied",
 		    {{state_ntop_func}}_safe(fsm->current_state));
 	}
 	return CFSM_ERR_PRECONDITION;
-{{endif}}
-{{if event_preconds}} event_precond_fail:
+{{endif}}{{if event_preconds}}
+ event_precond_fail:
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "Event %s entry precondition not satisfied",
 		    {{event_ntop_func}}_safe(ev));
 	}
 	return CFSM_ERR_PRECONDITION;
-{{endif}}
-{{if events}} bad_event:
+{{endif}}{{if events}}
+ bad_event:
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "Invalid event %s in state %s",
@@ -289,7 +290,8 @@ enum {{state_enum}}
 		    {{state_ntop_func}}_safe(fsm->current_state));
 	}
 	return CFSM_ERR_INVALID_TRANSITION;
-{{else}} bad_transition:
+{{else}}
+ bad_transition:
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
 		    "Illegal state transition attempted: %s -> %s",
