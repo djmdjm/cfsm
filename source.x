@@ -20,29 +20,22 @@ struct {{fsm_struct}} {
 {{if transition_entry_callbacks}}/* Prototypes for state transition entry callbacks */
 {{for cb in transition_entry_callbacks}}void {{cb.key}}({{trans_cb_args_proto}});
 {{endfor}}
-{{endif}}
-{{if transition_exit_callbacks}}/* Prototypes for state transition exit callbacks */
+{{endif}}{{if transition_exit_callbacks}}/* Prototypes for state transition exit callbacks */
 {{for cb in transition_exit_callbacks}}void {{cb.key}}({{trans_cb_args_proto}});
 {{endfor}}
-{{endif}}
-{{if transition_entry_preconds}}/* Prototypes for state entry precondition checks */
+{{endif}}{{if transition_entry_preconds}}/* Prototypes for state entry precondition checks */
 {{for cb in transition_entry_preconds}}void {{cb.key}}({{trans_precond_args_proto}});
 {{endfor}}
-{{endif}}
-{{if transition_exit_preconds}}/* Prototypes for state exit precondition checks */
+{{endif}}{{if transition_exit_preconds}}/* Prototypes for state exit precondition checks */
 {{for cb in transition_exit_preconds}}void {{cb.key}}({{trans_precond_args_proto}});
 {{endfor}}
-{{endif}}
-{{if event_callbacks}}/* Prototypes for event callback functions */
+{{endif}}{{if event_callbacks}}/* Prototypes for event callback functions */
 {{for cb in event_callbacks}}void {{cb.key}}({{event_cb_args_proto}});
 {{endfor}}
-{{endif}}
-{{if event_preconds}}/* Prototypes for event precondition checks */
+{{endif}}{{if event_preconds}}/* Prototypes for event precondition checks */
 {{for cb in event_preconds}}void {{cb.key}}({{event_precond_args_proto}});
 {{endfor}}
-{{endif}}
-
-static int
+{{endif}}static int
 _is_{{state_enum}}_valid(enum {{state_enum}} n)
 {
 	if (!(n >= {{min_state_valid}} && n <= {{max_state_valid}}))
@@ -69,7 +62,6 @@ const char *
 
 	return r == NULL ? "[INVALID]" : r;
 }
-
 {{if events}}
 static int
 _is_{{event_enum}}_valid(enum {{event_enum}} n)
@@ -83,7 +75,7 @@ const char *
 {{event_ntop_func}}(enum {{event_enum}} n)
 {
 	const char *event_names[] = {
-{{for event in events}}		"{{event.key}}",
+{{for event in events_array}}		"{{event.value}}",
 {{endfor}}	};
 
 	if (_is_{{event_enum}}_valid(n) != 0)
@@ -99,16 +91,14 @@ const char *
 	return r == NULL ? "[INVALID]" : r;
 }
 {{endif}}
-
 {{if multiple_start_states}}struct {{fsm_struct}} *
 {{init_func}}(enum {{state_enum}} initial_state, char *errbuf, size_t errlen)
 {
 	struct {{fsm_struct}} *ret = NULL;
 
 	switch (initial_state) {
-{{for s in initial_states}}		case {{s.key}}:
-{{endfor}}
-		break;
+{{for s in initial_states}}	case {{s.value}}:
+{{endfor}}		break;
 	default:
 		if (errlen > 0 && errbuf != NULL) {
 			snprintf(errbuf, errlen,
@@ -125,8 +115,7 @@ const char *
 	}
 	ret->current_state = initial_state;
 	return ret;
-}
-{{else}}struct {{fsm_struct}} *
+}{{else}}struct {{fsm_struct}} *
 {{init_func}}(char *errbuf, size_t errlen)
 {
 	struct {{fsm_struct}} *ret = NULL;
@@ -138,8 +127,7 @@ const char *
 	}
 	ret->current_state = {{initial_states[0]}};
 	return ret;
-}
-{{endif}}
+}{{endif}}
 
 void
 {{free_func}}(struct {{fsm_struct}} *fsm)
@@ -158,12 +146,10 @@ enum {{state_enum}}
     {{if need_ctx}}void *ctx, {{endif}}char *errbuf, size_t errlen)
 {{else}}int {{advance_func}}(struct {{fsm_struct}} *fsm, enum {{state_enum}} new_state,
     {{if need_ctx}}void *ctx, {{endif}}char *errbuf, size_t errlen)
-{{endif}}
-{
+{{endif}}{
 	enum {{state_enum}} old_state;
 {{if events}}	enum {{state_enum}} new_state;
 {{endif}}
-
 	/* Sanity check states */
 	if (_is_{{state_enum}}_valid(fsm->current_state) != 0) {
 		if (errlen > 0 && errbuf != NULL) {
@@ -183,8 +169,7 @@ enum {{state_enum}}
 			    new_state);
 		}
 		return CFSM_ERR_INVALID_STATE;
-	}
-{{endif}}
+	}{{endif}}
 
 {{if events}}	/* Event validity checks */
 	switch(fsm->current_state) {
@@ -192,113 +177,83 @@ enum {{state_enum}}
 		switch (ev) {
 {{for event in state.value.events}}		case {{event.key}}:
 {{if event.value}}			new_state = {{event.value}};
-			break;
-{{else}}		return 0;
-{{endif}}
-{{endfor}}
-		default:
+			break;{{else}}			return 0;{{endif}}
+{{endfor}}		default:
 			goto bad_event;
 		}
 {{endfor}}
-	}
-{{else}}	/* Transition checks */
+	}{{else}}	/* Transition checks */
 	switch(fsm->current_state) {
 {{for state in states}}	case {{state.key}}:
 		switch (new_state) {
 {{for next_state in state.value.next_states}}		case {{next_state.key}}:
-{{endfor}}
-			break;
+{{endfor}}			break;
 		default:
 			goto bad_transition;
 		}
 {{endfor}}
-	}
-{{endif}}
-
-{{if event_preconds}}	/* Event preconditions */
+	}{{endif}}
+{{if event_preconds}}
+	/* Event preconditions */
 	switch(ev) {
-{{for event in events}}	case {{event.key}}:
+{{for event in events}}{{if event.value.preconds}}	case {{event.key}}:
 {{for precond in event.value.preconds}}		if ({{precond.key}}({{event_precond_args}}) == -1)
 			goto event_precond_fail;
-{{endfor}}	
-			break;
-{{endfor}}
-		default:
-			break;
-		}
+{{endfor}}		break;
+{{endif}}{{endfor}}	default:
+		break;
 	}
-{{endif}}
-
-{{if transition_exit_preconds}}	/* Current state exit preconditions */
+{{endif}}{{if transition_exit_preconds}}
+	/* Current state exit preconditions */
 	switch(fsm->current_state) {
-{{for state in states}}	case {{state.key}}:
+{{for state in states}}{{if state.value.exit_preconds}}	case {{state.key}}:
 {{for precond in state.value.exit_preconds}}		if ({{precond.key}}({{trans_precond_args}}) == -1)
 			goto exit_precond_fail;
-{{endfor}}	
-			break;
-{{endfor}}
-		default:
-			break;
-		}
+{{endfor}}		break;
+{{endif}}{{endfor}}	default:
+		break;
 	}
-{{endif}}
-
-{{if transition_entry_preconds}}	/* Next state entry preconditions */
+{{endif}}{{if transition_entry_preconds}}
+	/* Next state entry preconditions */
 	switch(new_state) {
-{{for state in states}}	case {{state.key}}:
+{{for state in states}}{{if state.value.entry_preconds}}	case {{state.key}}:
 {{for precond in state.value.entry_preconds}}		if ({{precond.key}}({{trans_precond_args}}) == -1)
 			goto entry_precond_fail;
-{{endfor}}	
-			break;
-{{endfor}}
-		default:
-			break;
-		}
+{{endfor}}			break;
+{{endif}}{{endfor}}	default:
+		break;
 	}
-{{endif}}
-
-{{if event_callbacks}}	/* Event callbacks */
+{{endif}}{{if event_callbacks}}
+	/* Event callbacks */
 	switch(ev) {
-{{for event in events}}	case {{event.key}}:
+{{for event in events}}{{if event.value.callbacks}}	case {{event.key}}:
 {{for cb in event.value.callbacks}}		{{cb.key}}({{event_cb_args}});
-{{endfor}}	
-			break;
-{{endfor}}
-		default:
-			break;
-		}
+{{endfor}}		break;
+{{endif}}{{endfor}}	default:
+		break;
 	}
-{{endif}}
-
-{{if transition_exit_callbacks}}	/* Current state exit callbacks */
+{{endif}}{{if transition_exit_callbacks}}
+	/* Current state exit callbacks */
 	switch(ev) {
-{{for state in states}}	case {{state.key}}:
+{{for state in states}}{{if state.value.exit_callbacks}}	case {{state.key}}:
 {{for cb in state.value.exit_callbacks}}		{{cb.key}}({{trans_cb_args}});
-{{endfor}}	
-			break;
-{{endfor}}
-		default:
-			break;
-		}
-	}
-{{endif}}
+{{endfor}}			break;
+{{endif}}{{endfor}}	default:
+		break;
+	}{{endif}}
 
 	/* Switch state now */
 	old_state = fsm->current_state;
 	fsm->current_state = new_state;
-
-{{if transition_entry_callbacks}}	/* New state entry callbacks */
+{{if transition_entry_callbacks}}
+	/* New state entry callbacks */
 	switch(ev) {
-{{for state in states}}	case {{state.key}}:
+{{for state in states}}{{if state.value.entry_callbacks}}	case {{state.key}}:
 {{for cb in state.value.entry_callbacks}}		{{cb.key}}({{trans_cb_args}});
-{{endfor}}	
-			break;
-{{endfor}}
-		default:
-			break;
-		}
-	}
-{{endif}}
+{{endfor}}		break;
+{{endif}}{{endfor}}	default:
+		break;
+	}{{endif}}
 
 	return CFSM_OK;
 
@@ -342,5 +297,4 @@ enum {{state_enum}}
 		    {{state_ntop_func}}_safe(new_state));
 	}
 	return CFSM_ERR_INVALID_TRANSITION;
-{{endif}}
-}
+{{endif}}}

@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_parse.y,v 1.2 2007/04/15 02:11:17 djm Exp $ */
+/* $Id: cfsm_parse.y,v 1.3 2007/04/15 06:17:24 djm Exp $ */
 
 %{
 #include <sys/types.h>
@@ -295,13 +295,59 @@ initial_state_def:	INITIAL_STATE {
 	}
 	;
 
-next_state_def:		NEXT_STATE ID
+next_state_def:		NEXT_STATE ID {
+		struct xdict *next_states;
+
+		if (current_state == NULL) {
+			yyerror("\"next-state\" outside state block");
+			free($2);
+			YYERROR;
+		}
+		if ((next_states = (struct xdict *)xdict_item_s(current_state,
+		    "next_states")) == NULL)
+			errx(1, "next_state_def: state lacks next_states");
+		if (xdict_replace_si(next_states, $2, 1) == -1)
+			errx(1, "next_state_def: xdict_replace_si failed");
+		free($2);
+	}
 	;
 
-on_event_def:		EVENT_ADVANCE ID MOVETO ID
+on_event_def:		EVENT_ADVANCE ID MOVETO ID {
+		struct xdict *events;
+
+		if (current_state == NULL) {
+			yyerror("\"on-event\" outside state block");
+			free($2);
+			free($4);
+			YYERROR;
+		}
+		get_or_create_event($2);
+		if ((events = (struct xdict *)xdict_item_s(current_state,
+		    "events")) == NULL)
+			errx(1, "on_event_def: state lacks events");
+		if (xdict_replace_ss(events, $4, $2) == -1)
+			errx(1, "on_event_def: xdict_replace_ss failed");
+		free($2);
+		free($4);
+	}
 	;
 
-ignore_event_def:	IGNORE_EVENT ID
+ignore_event_def:	IGNORE_EVENT ID {
+		struct xdict *events;
+
+		if (current_state == NULL) {
+			yyerror("\"ignore-event\" outside state block");
+			free($2);
+			YYERROR;
+		}
+		get_or_create_event($2);
+		if ((events = (struct xdict *)xdict_item_s(current_state,
+		    "events")) == NULL)
+			errx(1, "on_event_def: state lacks events");
+		if (xdict_replace_sn(events, $2) == -1)
+			errx(1, "on_event_def: xdict_replace_sn failed");
+		free($2);
+	}
 	;
 
 entry_callback_def:	TRANSITION_ENTRY_CALLBACK ID {

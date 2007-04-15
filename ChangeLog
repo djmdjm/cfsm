@@ -2,6 +2,8 @@
  - (djm) Flesh out C implementation some more, fix some parser and
    template bugs. Now at the point where it will generate output, but
    that output is still incomplete and buggy.
+ - (djm) Lots of work on the C source template, still incomplete but much
+   closer now
 
 20070408
  - (djm) Extract C source and header from cfsm and factor it into templates
@@ -47,4 +49,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.14 2007/04/15 02:11:17 djm Exp $
+$Id: ChangeLog,v 1.15 2007/04/15 06:17:24 djm Exp $
