@@ -15,6 +15,7 @@
  - (djm) Adjust the regress tests to use the new default function names
  - (djm) The C-based cfsm is now fully functional and passes all regress
    tests. Remove the old Python implementation (it is still in the CVS attic)
+ - (djm) Add graphviz template
 
 20070408
  - (djm) Extract C source and header from cfsm and factor it into templates
@@ -60,4 +61,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.20 2007/04/15 13:54:57 djm Exp $
+$Id: ChangeLog,v 1.21 2007/04/15 14:17:34 djm Exp $
