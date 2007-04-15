@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_lex.l,v 1.1 2007/04/08 03:32:54 djm Exp $ */
+/* $Id: cfsm_lex.l,v 1.2 2007/04/15 02:11:17 djm Exp $ */
 
 %{
 #include "cfsm_parse.h"
@@ -78,14 +78,14 @@ transition-function-args		{ return TRANSITION_CALLBACK_ARGS; }
 {nl}					{ lnum++; }
 .					{ return yytext[0]; }
 
-source-banner				{ BEGIN(BANNER);
+source-banner{nl}			{ BEGIN(BANNER);
 					  return BANNER_START;
 					}
-<BANNER>{nl}				{ lnum++; }
-.					{ return yytext[0]; }
-<BANNER>end-source-banner		{ BEGIN(INITIAL);
+<BANNER>end-source-banner{nl}		{ BEGIN(INITIAL);
+					  lnum++;
 					  return BANNER_END;
 					}
-<BANNER>{fullline}			{ yylval.string = strdup(yytext);
+<BANNER>{fullline}{nl}			{ lnum++;
+					  yylval.string = strdup(yytext);
 					  return BANNER_LINE;
 					}

@@ -24,8 +24,8 @@ YACC=byacc
 
 all: cfsm_xxx
 
-cfsm_xxx: cfsm.o cfsm_parse.o cfsm_lex.o 
-	$(CC) -o $@ cfsm.o cfsm_parse.o cfsm_lex.o $(LDFLAGS) $(LIBS)
+cfsm_xxx: cfsm.o cfsm_parse.o cfsm_lex.o strlcat.o
+	$(CC) -o $@ cfsm.o cfsm_parse.o cfsm_lex.o strlcat.o $(LDFLAGS) $(LIBS)
 
 cfsm_lex.o: cfsm_parse.h
 

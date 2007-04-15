@@ -18,27 +18,27 @@ struct {{fsm_struct}} {
 };
 
 {{if transition_entry_callbacks}}/* Prototypes for state transition entry callbacks */
-{{for cb in transition_entry_callbacks}}void {{cb.key}}({{cb_args_proto}});
+{{for cb in transition_entry_callbacks}}void {{cb.key}}({{trans_cb_args_proto}});
 {{endfor}}
 {{endif}}
 {{if transition_exit_callbacks}}/* Prototypes for state transition exit callbacks */
-{{for cb in transition_exit_callbacks}}void {{cb.key}}({{cb_args_proto}});
+{{for cb in transition_exit_callbacks}}void {{cb.key}}({{trans_cb_args_proto}});
 {{endfor}}
 {{endif}}
 {{if transition_entry_preconds}}/* Prototypes for state entry precondition checks */
-{{for cb in transition_entry_preconds}}void {{cb.key}}({{precond_args_proto}});
+{{for cb in transition_entry_preconds}}void {{cb.key}}({{trans_precond_args_proto}});
 {{endfor}}
 {{endif}}
 {{if transition_exit_preconds}}/* Prototypes for state exit precondition checks */
-{{for cb in transition_exit_preconds}}void {{cb.key}}({{precond_args_proto}});
+{{for cb in transition_exit_preconds}}void {{cb.key}}({{trans_precond_args_proto}});
 {{endfor}}
 {{endif}}
-{{if event_callbacks}}/* Prototypes for event event functions */
-{{for cb in event_callbacks}}void {{cb.key}}({{cb_args_proto}});
+{{if event_callbacks}}/* Prototypes for event callback functions */
+{{for cb in event_callbacks}}void {{cb.key}}({{event_cb_args_proto}});
 {{endfor}}
 {{endif}}
 {{if event_preconds}}/* Prototypes for event precondition checks */
-{{for cb in event_precondss}}void {{cb.key}}({{precond_args_proto}});
+{{for cb in event_preconds}}void {{cb.key}}({{event_precond_args_proto}});
 {{endfor}}
 {{endif}}
 
@@ -83,7 +83,7 @@ const char *
 {{event_ntop_func}}(enum {{event_enum}} n)
 {
 	const char *event_names[] = {
-{{for event in states}}		"{{event.key}}",
+{{for event in events}}		"{{event.key}}",
 {{endfor}}	};
 
 	if (_is_{{event_enum}}_valid(n) != 0)
@@ -190,9 +190,11 @@ enum {{state_enum}}
 	switch(fsm->current_state) {
 {{for state in states}}	case {{state.key}}:
 		switch (ev) {
-{{for event in state.events}}		case {{event.key}}:
-			new_state = {{event.value}};
+{{for event in state.value.events}}		case {{event.key}}:
+{{if event.value}}			new_state = {{event.value}};
 			break;
+{{else}}		return 0;
+{{endif}}
 {{endfor}}
 		default:
 			goto bad_event;
@@ -203,7 +205,7 @@ enum {{state_enum}}
 	switch(fsm->current_state) {
 {{for state in states}}	case {{state.key}}:
 		switch (new_state) {
-{{for next_state in state.next_states}}		case {{next_state.value}}:
+{{for next_state in state.value.next_states}}		case {{next_state.key}}:
 {{endfor}}
 			break;
 		default:
@@ -216,11 +218,11 @@ enum {{state_enum}}
 {{if event_preconds}}	/* Event preconditions */
 	switch(ev) {
 {{for event in events}}	case {{event.key}}:
-{{for precond in event.value.preconds}}		if ({{precond.key}}({{precond_args}}) == -1)
+{{for precond in event.value.preconds}}		if ({{precond.key}}({{event_precond_args}}) == -1)
 			goto event_precond_fail;
 {{endfor}}	
 			break;
-{{endfor}
+{{endfor}}
 		default:
 			break;
 		}
@@ -230,7 +232,7 @@ enum {{state_enum}}
 {{if transition_exit_preconds}}	/* Current state exit preconditions */
 	switch(fsm->current_state) {
 {{for state in states}}	case {{state.key}}:
-{{for precond in state.value.exit_preconds}}		if ({{precond.key}}({{precond_args}}) == -1)
+{{for precond in state.value.exit_preconds}}		if ({{precond.key}}({{trans_precond_args}}) == -1)
 			goto exit_precond_fail;
 {{endfor}}	
 			break;
@@ -244,7 +246,7 @@ enum {{state_enum}}
 {{if transition_entry_preconds}}	/* Next state entry preconditions */
 	switch(new_state) {
 {{for state in states}}	case {{state.key}}:
-{{for precond in state.value.entry_preconds}}		if ({{precond.key}}({{precond_args}}) == -1)
+{{for precond in state.value.entry_preconds}}		if ({{precond.key}}({{trans_precond_args}}) == -1)
 			goto entry_precond_fail;
 {{endfor}}	
 			break;
@@ -258,10 +260,10 @@ enum {{state_enum}}
 {{if event_callbacks}}	/* Event callbacks */
 	switch(ev) {
 {{for event in events}}	case {{event.key}}:
-{{for cb in event.value.callbacks}}		{{cb.key}}({{callback_args}});
+{{for cb in event.value.callbacks}}		{{cb.key}}({{event_cb_args}});
 {{endfor}}	
 			break;
-{{endfor}
+{{endfor}}
 		default:
 			break;
 		}
@@ -270,11 +272,11 @@ enum {{state_enum}}
 
 {{if transition_exit_callbacks}}	/* Current state exit callbacks */
 	switch(ev) {
-{{for state in states}}	case {{event.key}}:
-{{for cb in state.value.exit_callbacks}}		{{cb.key}}({{callback_args}});
+{{for state in states}}	case {{state.key}}:
+{{for cb in state.value.exit_callbacks}}		{{cb.key}}({{trans_cb_args}});
 {{endfor}}	
 			break;
-{{endfor}
+{{endfor}}
 		default:
 			break;
 		}
@@ -287,11 +289,11 @@ enum {{state_enum}}
 
 {{if transition_entry_callbacks}}	/* New state entry callbacks */
 	switch(ev) {
-{{for state in states}}	case {{event.key}}:
-{{for cb in state.value.entry_callbacks}}		{{cb.key}}({{callback_args}});
+{{for state in states}}	case {{state.key}}:
+{{for cb in state.value.entry_callbacks}}		{{cb.key}}({{trans_cb_args}});
 {{endfor}}	
 			break;
-{{endfor}
+{{endfor}}
 		default:
 			break;
 		}
