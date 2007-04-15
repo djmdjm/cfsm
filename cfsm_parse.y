@@ -14,12 +14,13 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_parse.y,v 1.4 2007/04/15 08:45:58 djm Exp $ */
+/* $Id: cfsm_parse.y,v 1.5 2007/04/15 09:43:58 djm Exp $ */
 
 %{
 #include <sys/types.h>
 #include <sys/param.h>
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -79,8 +80,15 @@ static struct xdict *fsm_trans_exit_preconds = NULL;
 static struct xdict *current_state;
 static struct xdict *current_event;
 
+/* Temporary buffer to accumulate source-banner */
 static size_t banner_len = 0;
 static char *banner = NULL;
+
+/* Bitfields for arguments to provide to callback functions */
+u_int trans_callback_args = 0;
+u_int event_callback_args = 0;
+u_int trans_precond_args = 0;
+u_int event_precond_args = 0;
 
 #define CB_ARG_CTX		(1)
 #define CB_ARG_EVENT		(1<<1)
@@ -225,42 +233,22 @@ callback_args:		NONE 		{ $$ = 0; }
 	;
 
 event_precond_arg_def:	EVENT_PRECOND_ARGS callback_args {
-		if (xdict_replace_ss(fsm_namespace, "event_precond_args",
-		    gen_cb_args($2)) == -1)
-			errx(1, "event_precond_arg_def: xdict_replace_ss");
-		if (xdict_replace_ss(fsm_namespace, "event_precond_args_proto",
-		    gen_cb_args_proto($2)) == -1)
-			errx(1, "event_precond_arg_def: xdict_replace_ss");
+		event_precond_args = $2;
 	}
 	;
 
 trans_precond_arg_def:	TRANSITION_PRECOND_ARGS callback_args {
-		if (xdict_replace_ss(fsm_namespace, "trans_precond_args",
-		    gen_cb_args($2)) == -1)
-			errx(1, "trans_precond_arg_def: xdict_replace_ss");
-		if (xdict_replace_ss(fsm_namespace, "trans_precond_args_proto",
-		    gen_cb_args_proto($2)) == -1)
-			errx(1, "trans_precond_arg_def: xdict_replace_ss");
+		trans_precond_args = $2;
 	}
 	;
 
 event_callback_arg_def:	EVENT_CALLBACK_ARGS callback_args {
-		if (xdict_replace_ss(fsm_namespace, "event_cb_args",
-		    gen_cb_args($2)) == -1)
-			errx(1, "event_callback_arg_def: xdict_replace_ss");
-		if (xdict_replace_ss(fsm_namespace, "event_cb_args_proto",
-		    gen_cb_args_proto($2)) == -1)
-			errx(1, "event_callback_arg_def: xdict_replace_ss");
+		event_callback_args = $2;
 	}
 	;
 
 trans_callback_arg_def:	TRANSITION_CALLBACK_ARGS callback_args {
-		if (xdict_replace_ss(fsm_namespace, "trans_cb_args",
-		    gen_cb_args($2)) == -1)
-			errx(1, "trans_callback_arg_def: xdict_replace_ss");
-		if (xdict_replace_ss(fsm_namespace, "trans_cb_args_proto",
-		    gen_cb_args_proto($2)) == -1)
-			errx(1, "trans_callback_arg_def: xdict_replace_ss");
+		trans_callback_args = $2;
 	}
 	;
 
@@ -511,18 +499,34 @@ gen_cb_args(u_int argdef)
 static const char *
 gen_cb_args_proto(u_int argdef)
 {
-	static char buf[256];
+	static char buf[512];
+	const char *state_enum, *event_enum;
+	struct xobject *tmp;
 
-	/* XXX: shit. need state_enum and event_enum expansion here! */
+	if ((tmp = xdict_item_s(fsm_namespace, "state_enum")) == NULL ||
+	    (state_enum = xstring_ptr((struct xstring *)tmp)) == NULL ||
+	    (tmp = xdict_item_s(fsm_namespace, "event_enum")) == NULL ||
+	    (event_enum = xstring_ptr((struct xstring *)tmp)) == NULL)
+		errx(1, "Unable to retrieve event/state enum def");
+
 	if (argdef == 0)
 		return "";
 	*buf = '\0';
-	if ((argdef & CB_ARG_EVENT) != 0)
-		commacat(buf, "XXX1", sizeof(buf));
-	if ((argdef & CB_ARG_OLD_STATE) != 0)
-		commacat(buf, "XXX2", sizeof(buf));
-	if ((argdef & CB_ARG_NEW_STATE) != 0)
-		commacat(buf, "XXX3", sizeof(buf));
+	if ((argdef & CB_ARG_EVENT) != 0) {
+		commacat(buf, "enum ", sizeof(buf));
+		strlcat(buf, event_enum, sizeof(buf));
+		strlcat(buf, " ev", sizeof(buf));
+	}
+	if ((argdef & CB_ARG_OLD_STATE) != 0) {
+		commacat(buf, "enum ", sizeof(buf));
+		strlcat(buf, state_enum, sizeof(buf));
+		strlcat(buf, " old_state", sizeof(buf));
+	}
+	if ((argdef & CB_ARG_NEW_STATE) != 0) {
+		commacat(buf, "enum ", sizeof(buf));
+		strlcat(buf, state_enum, sizeof(buf));
+		strlcat(buf, " new_state", sizeof(buf));
+	}
 	if ((argdef & CB_ARG_CTX) != 0)
 		commacat(buf, "void *ctx", sizeof(buf));
 	return buf;
@@ -703,4 +707,32 @@ finalise_namespace(void)
 		if (xdict_insert_s(fsm_namespace, "max_event_valid", tmp) == -1)
 			errx(1, "xdict_insert_s failed");
 	}
+
+	if (xdict_replace_ss(fsm_namespace, "event_precond_args",
+	    gen_cb_args(event_precond_args)) == -1)
+		errx(1, "event_precond_arg_def: xdict_replace_ss");
+	if (xdict_replace_ss(fsm_namespace, "event_precond_args_proto",
+	    gen_cb_args_proto(event_precond_args)) == -1)
+		errx(1, "event_precond_arg_def: xdict_replace_ss");
+
+	if (xdict_replace_ss(fsm_namespace, "trans_precond_args",
+	    gen_cb_args(trans_precond_args)) == -1)
+		errx(1, "trans_precond_arg_def: xdict_replace_ss");
+	if (xdict_replace_ss(fsm_namespace, "trans_precond_args_proto",
+	    gen_cb_args_proto(trans_precond_args)) == -1)
+		errx(1, "trans_precond_arg_def: xdict_replace_ss");
+
+	if (xdict_replace_ss(fsm_namespace, "event_cb_args",
+	    gen_cb_args(event_callback_args)) == -1)
+		errx(1, "event_callback_arg_def: xdict_replace_ss");
+	if (xdict_replace_ss(fsm_namespace, "event_cb_args_proto",
+	    gen_cb_args_proto(event_callback_args)) == -1)
+		errx(1, "event_callback_arg_def: xdict_replace_ss");
+
+	if (xdict_replace_ss(fsm_namespace, "trans_cb_args",
+	    gen_cb_args(trans_callback_args)) == -1)
+		errx(1, "trans_callback_arg_def: xdict_replace_ss");
+	if (xdict_replace_ss(fsm_namespace, "trans_cb_args_proto",
+	    gen_cb_args_proto(trans_callback_args)) == -1)
+		errx(1, "trans_callback_arg_def: xdict_replace_ss");
 }

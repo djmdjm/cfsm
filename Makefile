@@ -20,7 +20,7 @@ LIBS+= -lxtemplate -lxobject -ly -ll
 
 RANLIB=ranlib
 LEX=lex
-YACC=byacc
+YACC=yacc
 
 all: cfsm_xxx
 
