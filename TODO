@@ -12,7 +12,7 @@ one-visit states
 implement transition checks as a packed (bit vector) adjacency matrix
 rather than a rat's nest of switch() statements
   further to this - generalise all code into a libcfsm and only generate
-  starting data
+  starting data (have per-transition lists of function pointers)
 
 improve graphviz output
 	display preconditions
@@ -23,23 +23,14 @@ more regress tests
 	test consistency checks
 
 better documentation
+	manpages
 	BNF for parser
 
 state_reset() function
 	(probably don't need this)
 
-templatise the code sections in cfsm
-	done as much as I can without a template language and I don't want
-	external dependancies (perhaps ship and use ezt.py)
-
-generation of C source without the header is broken
-	options for "header filename" and "include guard"?
-	(cruddy workaround in place: must generate both at once)
-
 reentrance protection?
 	set a flag in the fsm struct in state_advance
-
-ctx accessor functions?
 
 "template" state/events:
     state *
@@ -53,4 +44,4 @@ wildcard events:
 
 wildcard next states
 
-$Id: TODO,v 1.13 2007/04/15 22:58:50 djm Exp $
+$Id: TODO,v 1.14 2007/04/16 00:34:36 djm Exp $
