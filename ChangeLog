@@ -1,5 +1,6 @@
 20070416
  - (djm) Add a "manual mode" where the user can specify their own template
+ - (djm) More spacing fixes for source template
 
 20070415
  - (djm) Flesh out C implementation some more, fix some parser and
@@ -64,4 +65,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.22 2007/04/15 22:58:19 djm Exp $
+$Id: ChangeLog,v 1.23 2007/04/16 11:55:03 djm Exp $

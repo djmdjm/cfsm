@@ -174,7 +174,7 @@ enum {{state_enum}}
 {{if events}}	/* Event validity checks */
 	switch(old_state) {
 {{for state in states}}	case {{state.key}}:
-		switch (ev) {
+{{if state.value.events}}		switch (ev) {
 {{for event in state.value.events}}		case {{event.key}}:
 {{if event.value}}			new_state = {{event.value}};
 			break;{{else}}			return 0;{{endif}}
@@ -182,19 +182,19 @@ enum {{state_enum}}
 			goto bad_event;
 		}
 		break;
-{{endfor}}
-	}{{else}}	/* Transition checks */
+{{else}}		goto bad_event;
+{{endif}}{{endfor}}	}{{else}}	/* Transition checks */
 	switch(old_state) {
 {{for state in states}}	case {{state.key}}:
-		switch (new_state) {
+{{if state.value.next_states}}		switch (new_state) {
 {{for next_state in state.value.next_states}}		case {{next_state.key}}:
 {{endfor}}			break;
 		default:
 			goto bad_transition;
 		}
 		break;
-{{endfor}}
-	}{{endif}}
+{{else}}		goto bad_transition;
+{{endif}}{{endfor}}	}{{endif}}
 {{if event_preconds}}
 	/* Event preconditions */
 	switch(ev) {
