@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm.c,v 1.7 2007/04/16 11:55:56 djm Exp $ */
+/* $Id: cfsm.c,v 1.8 2007/04/16 12:03:19 djm Exp $ */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -109,9 +109,9 @@ render_template(const char *template_dir, const char *template_path,
 		out_arg = "(stdout)";
 	} else if ((out_file = fopen(out_arg, "w")) == NULL)
 		err(1, "fopen(\"%s\", \"w\")", out_arg);
-	if (xtemplate_run(tmpl, fsm_namespace, out_file,
+	if (xtemplate_run_stdio(tmpl, fsm_namespace, out_file,
 		err_buf, sizeof(err_buf)) == -1)
-		errx(1, "xtemplate_run: %s", err_buf);
+		errx(1, "xtemplate_run_stdio: %s", err_buf);
 	if (out_file != stdout)
 		fclose(out_file);
 }
