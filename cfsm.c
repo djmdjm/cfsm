@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm.c,v 1.6 2007/04/15 22:58:19 djm Exp $ */
+/* $Id: cfsm.c,v 1.7 2007/04/16 11:55:56 djm Exp $ */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -45,7 +45,7 @@ const char *in_path = NULL;		/* Input pathname */
 char *header_name = NULL;		/* Header file name */
 
 static struct xtemplate *
-read_template(const char *template_path)
+read_template(const char *template_dir, const char *template_name)
 {
 	char *template;
 	size_t tlen;
@@ -54,9 +54,19 @@ read_template(const char *template_path)
 	int tfd;
 	struct xtemplate *ret;
 
-	if ((tfd = open(template_path, O_RDONLY)) == -1)
-		err(1, "Unable to open template \"%s\" for reading",
-		    template_path);
+	if ((tlen = strlcpy(buf, template_dir, sizeof(buf))) >= sizeof(buf))
+		errx(1, "Template path too long");
+	if (tlen > 0 && buf[tlen - 1] != '/') {
+		if (tlen + 2 >= sizeof(buf))
+			errx(1, "Template path too long");
+		buf[tlen++] = '/';
+		buf[tlen++] = '\0';
+	}
+	if ((tlen = strlcat(buf, template_name, sizeof(buf))) >= sizeof(buf))
+		errx(1, "Template path too long");
+
+	if ((tfd = open(buf, O_RDONLY)) == -1)
+		err(1, "Unable to open template \"%s\" for reading", buf);
 
 	template = NULL;
 	tlen = 0;
@@ -86,13 +96,14 @@ read_template(const char *template_path)
 }
 
 static void
-render_template(const char *template_path, const char *out_arg)
+render_template(const char *template_dir, const char *template_path,
+    const char *out_arg)
 {
 	char err_buf[1024];
 	FILE *out_file = NULL;
 	struct xtemplate *tmpl;
 
-	tmpl = read_template(template_path);
+	tmpl = read_template(template_dir, template_path);
 	if (strcmp(out_arg, "-") == 0) {
 		out_file = stdout;
 		out_arg = "(stdout)";
@@ -114,9 +125,10 @@ usage(void)
 "    -h               Display this help\n"
 "    -d               Generate C header file in addition to source file\n"
 "    -D               Only generate C header file (and not a source file)\n"
-"    -g               Generate graphviz dot file instead of C source/header\n"
+"    -g               Generate Graphviz dot file instead of C source/header\n"
 "    -m template_file \"Manual\" output mode using user-supplied template\n"
-"    -o output_file   Specify output file (default: fsm.[c|h|dot])\n");
+"    -o output_file   Specify output file (default: fsm.[c|h|dot])\n"
+"    -t template_dir  Specify path to C and Graphviz templates\n");
 }
 
 int
@@ -126,10 +138,11 @@ main(int argc, char **argv)
 	extern int optind;
 	int ch;
 	const char *manual_arg = NULL, *out_arg = NULL, *out;
+	const char *template_dir = TEMPLATE_DIR;
 	int output_dot = 0, output_header = 0, output_src = 1;
 	size_t len;
 
-	while ((ch = getopt(argc, argv, "Dhdgm:o:")) != -1) {
+	while ((ch = getopt(argc, argv, "Dhdgm:o:t:")) != -1) {
 		switch (ch) {
 		case 'h':
 			usage();
@@ -151,6 +164,9 @@ main(int argc, char **argv)
 			break;
 		case 'o':
 			out_arg = optarg;
+			break;
+		case 't':
+			template_dir = optarg;
 			break;
 		default:
 			warnx("Unrecognised command line option");
@@ -217,13 +233,13 @@ main(int argc, char **argv)
 	if (output_dot) {
 		out = out_arg == NULL ? DEFAULT_OUT_DOT : out_arg;
 		warnx("Writing Graphviz dot to \"%s\"", out);
-		render_template(TEMPLATE_GRAPHVIZ, out);
+		render_template(template_dir, TEMPLATE_GRAPHVIZ, out);
 	}
 
 	if (output_src) {
 		out = out_arg == NULL ? DEFAULT_OUT_C_SRC : out_arg;
 		warnx("Writing C source to \"%s\"", out);
-		render_template(TEMPLATE_C_SOURCE, out);
+		render_template(template_dir, TEMPLATE_C_SOURCE, out);
 	}
 
 	if (output_header) {
@@ -232,13 +248,13 @@ main(int argc, char **argv)
 		else
 			out = out_arg == NULL ? DEFAULT_OUT_C_HDR : out_arg;
 		warnx("Writing C header to \"%s\"", out);
-		render_template(TEMPLATE_C_HEADER, out);
+		render_template(template_dir, TEMPLATE_C_HEADER, out);
 	}
 
 	if (manual_arg != NULL) {
 		warnx("Rendering template \"%s\" to \"%s\"",
 		    manual_arg, out_arg);
-		render_template(manual_arg, out_arg);
+		render_template("", manual_arg, out_arg);
 	}
 
 	if (header_name != NULL)

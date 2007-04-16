@@ -11,8 +11,12 @@ CFLAGS+=    -Wshadow
 #CFLAGS+=    -Wno-pointer-sign
 #CFLAGS+=    -Wno-attributes
 
+BINDIR=/usr/local/bin
+TEMPLATEDIR=/usr/local/share/cfsm
+
 CFLAGS+=    -g -std=gnu99 -D_GNU_SOURCE
 CFLAGS+=    -I.
+CFLAGS+=    -DTEMPLATE_DIR=\"$(TEMPLATEDIR)\"
 
 LDFLAGS+= -L../xobject -L../xtemplate
 CFLAGS+= -I../xobject -I../xtemplate -DYYDEBUG=1
