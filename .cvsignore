@@ -1,1 +1,4 @@
 cfsm
+cfsm_lex.c
+cfsm_parse.c
+cfsm_parse.h
