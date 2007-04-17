@@ -1,5 +1,9 @@
 20070417
  - (djm) Adapt to libxobject's API change
+ - (djm) Adapt to renaming of libxobject+libxtemplate to libmtemplate
+ - (djm) Rename template files *.x -> *.m. The rename has been performed as
+   a local deletion for the old names, but a repository-side copy so as to
+   preserve history
 
 20070416
  - (djm) Add a "manual mode" where the user can specify their own template
@@ -71,4 +75,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.26 2007/04/17 09:32:42 djm Exp $
+$Id: ChangeLog,v 1.27 2007/04/17 12:40:49 djm Exp $

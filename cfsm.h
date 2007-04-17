@@ -14,14 +14,14 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm.h,v 1.5 2007/04/16 11:55:56 djm Exp $ */
+/* $Id: cfsm.h,v 1.6 2007/04/17 12:40:49 djm Exp $ */
 
 #ifndef _CFSM_H
 #define _CFSM_H
 
-#define TEMPLATE_C_SOURCE		"source.x"
-#define TEMPLATE_C_HEADER		"header.x"
-#define TEMPLATE_GRAPHVIZ		"graphviz.x"
+#define TEMPLATE_C_SOURCE		"source.m"
+#define TEMPLATE_C_HEADER		"header.m"
+#define TEMPLATE_GRAPHVIZ		"graphviz.m"
 
 /* Default output file names */
 #define DEFAULT_OUT_DOT			"fsm.dot"

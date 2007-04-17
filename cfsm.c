@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm.c,v 1.9 2007/04/17 09:32:42 djm Exp $ */
+/* $Id: cfsm.c,v 1.10 2007/04/17 12:40:49 djm Exp $ */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -28,8 +28,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "xtemplate.h"
-#include "xobject.h"
+#include "mtemplate.h"
+#include "mobject.h"
+#include "strlcpy.h"
+#include "strlcat.h"
 
 #include "cfsm.h"
 
@@ -38,13 +40,13 @@ extern FILE *yyin;
 extern int yyparse(void);
 extern void finalise_namespace(void);
 extern void setup_initial_namespace(void);
-extern struct xobject *fsm_namespace;
+extern struct mobject *fsm_namespace;
 
 /* Exported for use in cfsm_parse.y */
 const char *in_path = NULL;		/* Input pathname */
 char *header_name = NULL;		/* Header file name */
 
-static struct xtemplate *
+static struct mtemplate *
 read_template(const char *template_dir, const char *template_name)
 {
 	char *template;
@@ -52,7 +54,7 @@ read_template(const char *template_dir, const char *template_name)
 	ssize_t len;
 	char buf[8192];
 	int tfd;
-	struct xtemplate *ret;
+	struct mtemplate *ret;
 
 	if ((tlen = strlcpy(buf, template_dir, sizeof(buf))) >= sizeof(buf))
 		errx(1, "Template path too long");
@@ -89,8 +91,8 @@ read_template(const char *template_dir, const char *template_name)
 	}
 	close(tfd);
 
-	if ((ret = xtemplate_parse(template, buf, sizeof(buf))) == NULL)
-		errx(1, "xtemplate_parse: %s", buf);
+	if ((ret = mtemplate_parse(template, buf, sizeof(buf))) == NULL)
+		errx(1, "mtemplate_parse: %s", buf);
 
 	return ret;
 }
@@ -101,7 +103,7 @@ render_template(const char *template_dir, const char *template_path,
 {
 	char err_buf[1024];
 	FILE *out_file = NULL;
-	struct xtemplate *tmpl;
+	struct mtemplate *tmpl;
 
 	tmpl = read_template(template_dir, template_path);
 	if (strcmp(out_arg, "-") == 0) {
@@ -109,9 +111,9 @@ render_template(const char *template_dir, const char *template_path,
 		out_arg = "(stdout)";
 	} else if ((out_file = fopen(out_arg, "w")) == NULL)
 		err(1, "fopen(\"%s\", \"w\")", out_arg);
-	if (xtemplate_run_stdio(tmpl, fsm_namespace, out_file,
+	if (mtemplate_run_stdio(tmpl, fsm_namespace, out_file,
 		err_buf, sizeof(err_buf)) == -1)
-		errx(1, "xtemplate_run_stdio: %s", err_buf);
+		errx(1, "mtemplate_run_stdio: %s", err_buf);
 	if (out_file != stdout)
 		fclose(out_file);
 }
