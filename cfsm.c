@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm.c,v 1.8 2007/04/16 12:03:19 djm Exp $ */
+/* $Id: cfsm.c,v 1.9 2007/04/17 09:32:42 djm Exp $ */
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -38,7 +38,7 @@ extern FILE *yyin;
 extern int yyparse(void);
 extern void finalise_namespace(void);
 extern void setup_initial_namespace(void);
-extern struct xdict *fsm_namespace;
+extern struct xobject *fsm_namespace;
 
 /* Exported for use in cfsm_parse.y */
 const char *in_path = NULL;		/* Input pathname */

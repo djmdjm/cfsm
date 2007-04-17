@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_parse.y,v 1.9 2007/04/15 23:00:08 djm Exp $ */
+/* $Id: cfsm_parse.y,v 1.10 2007/04/17 09:32:42 djm Exp $ */
 
 %{
 #include <sys/types.h>
@@ -39,9 +39,9 @@ int yyparse(void);
 void yyerror(const char *, ...);
 static const char *gen_cb_args(u_int);
 static const char *gen_cb_args_proto(u_int);
-static struct xdict *get_or_create_event(char *);
-static int create_action(char *, const char *, const char *, struct xdict *,
-    const char *, struct xdict *);
+static struct xobject *get_or_create_event(char *);
+static int create_action(char *, const char *, const char *, struct xobject *,
+    const char *, struct xobject *);
 void finalise_namespace(void);
 void setup_initial_namespace(void);
 
@@ -61,24 +61,24 @@ u_int lnum = 0;
  * The representation of the FSM that is built during parsing and
  * subsequently used to fill in the template
  */
-struct xdict *fsm_namespace = NULL;
+struct xobject *fsm_namespace = NULL;
 
 /* Convenience pointers to commonly-used objects in the namespace */
-static struct xarray *fsm_initial_states = NULL;
-static struct xarray *fsm_states_array = NULL;
-static struct xarray *fsm_events_array = NULL;
-static struct xdict *fsm_states = NULL;
-static struct xdict *fsm_events = NULL;
-static struct xdict *fsm_event_callbacks = NULL;
-static struct xdict *fsm_event_preconds = NULL;
-static struct xdict *fsm_trans_entry_callbacks = NULL;
-static struct xdict *fsm_trans_entry_preconds = NULL;
-static struct xdict *fsm_trans_exit_callbacks = NULL;
-static struct xdict *fsm_trans_exit_preconds = NULL;
+static struct xobject *fsm_initial_states = NULL;
+static struct xobject *fsm_states_array = NULL;
+static struct xobject *fsm_events_array = NULL;
+static struct xobject *fsm_states = NULL;
+static struct xobject *fsm_events = NULL;
+static struct xobject *fsm_event_callbacks = NULL;
+static struct xobject *fsm_event_preconds = NULL;
+static struct xobject *fsm_trans_entry_callbacks = NULL;
+static struct xobject *fsm_trans_entry_preconds = NULL;
+static struct xobject *fsm_trans_exit_callbacks = NULL;
+static struct xobject *fsm_trans_exit_preconds = NULL;
 
 /* Pointers to active event or state */
-static struct xdict *current_state;
-static struct xdict *current_event;
+static struct xobject *current_state;
+static struct xobject *current_event;
 
 /* Temporary buffer to accumulate source-banner */
 static size_t banner_len = 0;
@@ -262,8 +262,8 @@ state_decl:		STATE ID {
 			free($2);
 			YYERROR;
 		} else {
-			if ((current_state = (struct xdict *)xdict_item_s(
-			    fsm_states, $2)) == NULL)
+			if ((current_state = xdict_item_s(fsm_states,
+			    $2)) == NULL)
 				errx(1, "state_decl: xdict_item_s failed");
 		}
 		if (xdict_insert_ss(current_state, "name", $2) == -1 ||
@@ -290,7 +290,7 @@ initial_state_def:	INITIAL_STATE {
 		}
 		if ((i = xdict_item_s(current_state, "is_initial")) == NULL)
 			errx(1, "initial_state_def: state lacks is_initial");
-		if (xint_value((struct xint *)i) != 0) {
+		if (xint_value(i) != 0) {
 			yyerror("\"initial-state\" already set for this state");
 			YYERROR;
 		}
@@ -306,7 +306,7 @@ initial_state_def:	INITIAL_STATE {
 	;
 
 next_state_def:		NEXT_STATE ID {
-		struct xdict *next_states;
+		struct xobject *next_states;
 
 		if (current_state == NULL) {
 			yyerror("\"next-state\" outside state block");
@@ -320,7 +320,7 @@ next_state_def:		NEXT_STATE ID {
 			YYERROR;
 		}
 		next_state_specified = 1;
-		if ((next_states = (struct xdict *)xdict_item_s(current_state,
+		if ((next_states = xdict_item_s(current_state,
 		    "next_states")) == NULL)
 			errx(1, "next_state_def: state lacks next_states");
 		if (xdict_replace_si(next_states, $2, 1) == -1)
@@ -330,7 +330,7 @@ next_state_def:		NEXT_STATE ID {
 	;
 
 on_event_def:		EVENT_ADVANCE ID MOVETO ID {
-		struct xdict *events, *next_states;
+		struct xobject *events, *next_states;
 
 		if (current_state == NULL) {
 			yyerror("\"on-event\" outside state block");
@@ -343,13 +343,12 @@ on_event_def:		EVENT_ADVANCE ID MOVETO ID {
 			free($4);
 			YYERROR;
 		}
-		if ((events = (struct xdict *)xdict_item_s(current_state,
-		    "events")) == NULL)
+		if ((events = xdict_item_s(current_state, "events")) == NULL)
 			errx(1, "on_event_def: state lacks events");
 		if (xdict_replace_ss(events, $2, $4) == -1)
 			errx(1, "on_event_def: xdict_replace_ss failed");
 
-		if ((next_states = (struct xdict *)xdict_item_s(current_state,
+		if ((next_states = xdict_item_s(current_state,
 		    "next_states")) == NULL)
 			errx(1, "on_event_def: state lacks next_states");
 		if (xdict_replace_si(next_states, $4, 1) == -1)
@@ -361,7 +360,7 @@ on_event_def:		EVENT_ADVANCE ID MOVETO ID {
 	;
 
 ignore_event_def:	IGNORE_EVENT ID {
-		struct xdict *events;
+		struct xobject *events;
 
 		if (current_state == NULL) {
 			yyerror("\"ignore-event\" outside state block");
@@ -372,8 +371,7 @@ ignore_event_def:	IGNORE_EVENT ID {
 			free($2);
 			YYERROR;
 		}
-		if ((events = (struct xdict *)xdict_item_s(current_state,
-		    "events")) == NULL)
+		if ((events = xdict_item_s(current_state, "events")) == NULL)
 			errx(1, "on_event_def: state lacks events");
 		if (xdict_replace_sn(events, $2) == -1)
 			errx(1, "on_event_def: xdict_replace_sn failed");
@@ -532,9 +530,9 @@ gen_cb_args_proto(u_int argdef)
 	struct xobject *tmp;
 
 	if ((tmp = xdict_item_s(fsm_namespace, "state_enum")) == NULL ||
-	    (state_enum = xstring_ptr((struct xstring *)tmp)) == NULL ||
+	    (state_enum = xstring_ptr(tmp)) == NULL ||
 	    (tmp = xdict_item_s(fsm_namespace, "event_enum")) == NULL ||
-	    (event_enum = xstring_ptr((struct xstring *)tmp)) == NULL)
+	    (event_enum = xstring_ptr(tmp)) == NULL)
 		errx(1, "Unable to retrieve event/state enum def");
 
 	if (argdef == 0)
@@ -560,10 +558,10 @@ gen_cb_args_proto(u_int argdef)
 	return buf;
 }
 
-static struct xdict *
+static struct xobject *
 get_or_create_event(char *name)
 {
-	struct xdict *ret;
+	struct xobject *ret;
 
 	if (next_state_specified) {
 		yyerror("Cannot mix events with explicit state transitions");
@@ -571,12 +569,11 @@ get_or_create_event(char *name)
 	}
 	event_specified = 1;
 
-	ret = (struct xdict *)xdict_item_s(fsm_events, name);
+	ret = xdict_item_s(fsm_events, name);
 	if (ret == NULL) {
 		if (xdict_insert_sd(fsm_events, name) == -1)
 			errx(1, "%s: xdict_item_s failed", __func__);
-		if ((ret = (struct xdict *)xdict_item_s(
-			fsm_events, name)) == NULL)
+		if ((ret = xdict_item_s(fsm_events, name)) == NULL)
 			errx(1, "%s: xdict_item_s failed", __func__);
 		if (xdict_insert_sd(ret, "preconds") == -1 ||
 		    xdict_insert_sd(ret, "callbacks") == -1)
@@ -589,15 +586,15 @@ get_or_create_event(char *name)
 
 static int
 create_action(char *name, const char *context, const char *block,
-    struct xdict *parent, const char *member, struct xdict *main_list)
+    struct xobject *parent, const char *member, struct xobject *main_list)
 {
-	struct xdict *l;
+	struct xobject *l;
 
 	if (parent == NULL) {
 		yyerror("\"%s\" outside %s block", context, block);
 		return -1;
 	}
-	if ((l = (struct xdict *)xdict_item_s(parent, member)) == NULL)
+	if ((l = xdict_item_s(parent, member)) == NULL)
 		errx(1, "%s(%s): %s lacks %s", __func__, context,
 		    block, member);
 	if (xdict_replace_si(l, name, 1) != 0)
@@ -627,8 +624,8 @@ setup_initial_namespace(void)
 		if (xdict_insert_sa(fsm_namespace, k) != 0) \
 			errx(1, "Default set for \"%s\" failed", k); \
 	} while (0)
-#define DEF_GET(o, k, c) do { \
-		if ((o = (struct c *)xdict_item_s(fsm_namespace, k)) == NULL) \
+#define DEF_GET(o, k) do { \
+		if ((o = xdict_item_s(fsm_namespace, k)) == NULL) \
 			errx(1, "Lookup for default \"%s\" failed", k); \
 	} while (0)
 
@@ -668,17 +665,17 @@ setup_initial_namespace(void)
 	DEF_DICT("transition_entry_preconds");
 	DEF_DICT("transition_exit_preconds");
 
-	DEF_GET(fsm_states_array, "states_array", xarray);
-	DEF_GET(fsm_events_array, "events_array", xarray);
-	DEF_GET(fsm_initial_states, "initial_states", xarray);
-	DEF_GET(fsm_states, "states", xdict);
-	DEF_GET(fsm_events, "events", xdict);
-	DEF_GET(fsm_event_callbacks, "event_callbacks", xdict);
-	DEF_GET(fsm_event_preconds, "event_preconds", xdict);
-	DEF_GET(fsm_trans_entry_callbacks, "transition_entry_callbacks",xdict);
-	DEF_GET(fsm_trans_entry_preconds, "transition_entry_preconds", xdict);
-	DEF_GET(fsm_trans_exit_callbacks, "transition_exit_callbacks", xdict);
-	DEF_GET(fsm_trans_exit_preconds, "transition_exit_preconds", xdict);
+	DEF_GET(fsm_states_array, "states_array");
+	DEF_GET(fsm_events_array, "events_array");
+	DEF_GET(fsm_initial_states, "initial_states");
+	DEF_GET(fsm_states, "states");
+	DEF_GET(fsm_events, "events");
+	DEF_GET(fsm_event_callbacks, "event_callbacks");
+	DEF_GET(fsm_event_preconds, "event_preconds");
+	DEF_GET(fsm_trans_entry_callbacks, "transition_entry_callbacks");
+	DEF_GET(fsm_trans_entry_preconds, "transition_entry_preconds");
+	DEF_GET(fsm_trans_exit_callbacks, "transition_exit_callbacks");
+	DEF_GET(fsm_trans_exit_preconds, "transition_exit_preconds");
 
 	if (xdict_insert_si(fsm_namespace, "need_ctx", 0) == -1)
 		errx(1, "Default set for \"need_ctx\" failed");
@@ -790,31 +787,27 @@ finalise_namespace(void)
 	 * Walk next_states and update each state's indegree, checking
 	 * for nonexistent next-states.
 	 */
-	if ((siter = xobject_getiter((struct xobject *)fsm_states)) == NULL)
+	if ((siter = xobject_getiter(fsm_states)) == NULL)
 		errx(1, "%s(%d): xobject_getiter", __func__, __LINE__);
 	while ((sitem = xiterator_next(siter)) != NULL) {
-		if ((state = xstring_ptr((struct xstring *)sitem->key)) == NULL)
+		if ((state = xstring_ptr(sitem->key)) == NULL)
 			errx(1, "%s(%d): fsm_states returned NULL key",
 			    __func__, __LINE__);
-		if ((tmp = xdict_item_s((struct xdict *)sitem->value,
-		    "next_states")) == NULL)
+		if ((tmp = xdict_item_s(sitem->value, "next_states")) == NULL)
 			errx(1, "%s(%d): xdict_item_s", __func__, __LINE__);
 		if ((niter = xobject_getiter(tmp)) == NULL)
 			errx(1, "%s(%d): xobject_getiter", __func__, __LINE__);
 		while ((nitem = xiterator_next(niter)) != NULL) {
-			if ((next_state = xstring_ptr((struct xstring *)
-			    nitem->key)) == NULL)
+			if ((next_state = xstring_ptr(nitem->key)) == NULL)
 				errx(1, "%s(%d): %s.next_states returned "
 				    "NULL key", __func__, __LINE__, state);
-			if ((tmp = xdict_item(fsm_states,
-			    (struct xstring *)nitem->key)) == NULL)
+			if ((tmp = xdict_item(fsm_states, nitem->key)) == NULL)
 				errx(1, "State \"%s\" references non-existent "
 				    "next state \"%s\"", state, next_state);
-			if ((tmp = xdict_item_s((struct xdict *)tmp,
-			    "indegree")) == NULL)
+			if ((tmp = xdict_item_s(tmp, "indegree")) == NULL)
 				errx(1, "State \"%s\" lacks indegree",
 				    next_state);
-			if (xint_add((struct xint *)tmp, 1) != 0)
+			if (xint_add(tmp, 1) != 0)
 				errx(1, "%s(%d): %s xint_add", __func__,
 				    __LINE__, next_state);
 		}
@@ -823,22 +816,19 @@ finalise_namespace(void)
 	xiterator_free(siter);
 
 	/* Now look for unreachable (indegree == 0) states */
-	if ((siter = xobject_getiter((struct xobject *)fsm_states)) == NULL)
+	if ((siter = xobject_getiter(fsm_states)) == NULL)
 		errx(1, "%s(%d): xobject_getiter", __func__, __LINE__);
 	while ((sitem = xiterator_next(siter)) != NULL) {
-		if ((state = xstring_ptr((struct xstring *)sitem->key)) == NULL)
+		if ((state = xstring_ptr(sitem->key)) == NULL)
 			errx(1, "%s(%d): fsm_states returned NULL key",
 			    __func__, __LINE__);
-		if ((tmp = xdict_item_s((struct xdict *)sitem->value,
-		    "indegree")) == NULL)
+		if ((tmp = xdict_item_s(sitem->value, "indegree")) == NULL)
 			errx(1, "State \"%s\" lacks indegree", state);
-		indegree = xint_value((struct xint *)tmp);
-		if (indegree > 0)
+		if ((indegree = xint_value(tmp)) > 0)
 			continue;
-		if ((tmp = xdict_item_s((struct xdict *)sitem->value,
-		    "is_initial")) == NULL)
-			errx(1, "State \"%s\" lacks indegree", state);
-		if (xint_value((struct xint *)tmp) != 1)
+		if ((tmp = xdict_item_s(sitem->value, "is_initial")) == NULL)
+			errx(1, "State \"%s\" lacks is_initial", state);
+		if (xint_value(tmp) != 1)
 			errx(1, "State \"%s\" is unreachable", state);
 	}
 	xiterator_free(siter);

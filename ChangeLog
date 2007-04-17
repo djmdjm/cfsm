@@ -1,3 +1,6 @@
+20070417
+ - (djm) Adapt to libxobject's API change
+
 20070416
  - (djm) Add a "manual mode" where the user can specify their own template
  - (djm) More spacing fixes for source template
@@ -68,4 +71,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.25 2007/04/16 12:03:19 djm Exp $
+$Id: ChangeLog,v 1.26 2007/04/17 09:32:42 djm Exp $
