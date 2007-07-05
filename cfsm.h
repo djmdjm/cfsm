@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Damien Miller <djm@mindrot.org>
+ * Copyright (c) 2007 Damien Miller <djm@mindrot.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm.h,v 1.6 2007/04/17 12:40:49 djm Exp $ */
+/* $Id: cfsm.h,v 1.7 2007/07/05 02:00:55 djm Exp $ */
 
 #ifndef _CFSM_H
 #define _CFSM_H

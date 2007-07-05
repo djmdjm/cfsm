@@ -44,7 +44,7 @@ cfsm_parse.c: cfsm_parse.y
 
 clean:
 	rm -f *.o cfsm cfsm_lex.[ch] cfsm_parse.[ch]
-	rm -f lex.yy.[ch] y.tab.[ch] core *.core
+	rm -f lex.yy.[ch] y.tab.[ch] core *.core fsm.c fsm.h fsm.dot
 	cd regress && make clean
 
 test: all

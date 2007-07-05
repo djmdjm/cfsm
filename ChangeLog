@@ -1,3 +1,7 @@
+20070705
+ - (djm) Clean up generated files in clean: target
+ - (djm) Insert copyright year in all notices
+
 20070417
  - (djm) Adapt to libxobject's API change
  - (djm) Adapt to renaming of libxobject+libxtemplate to libmtemplate
@@ -75,4 +79,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.27 2007/04/17 12:40:49 djm Exp $
+$Id: ChangeLog,v 1.28 2007/07/05 02:00:54 djm Exp $
