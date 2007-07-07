@@ -1,3 +1,10 @@
+manpage!!!
+
+output for other languages (just a matter of templates)
+	pure python
+	CPython module (worth it?)
+	java
+
 improve the grammar to get rid of current_state/event crap
 
 optionally generate callback stubs into a separate file too
@@ -44,4 +51,4 @@ wildcard events:
 
 wildcard next states
 
-$Id: TODO,v 1.14 2007/04/16 00:34:36 djm Exp $
+$Id: TODO,v 1.15 2007/07/07 00:28:01 djm Exp $

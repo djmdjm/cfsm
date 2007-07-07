@@ -1,3 +1,6 @@
+20070707
+ - (djm) Adapt to mtemplate API change
+
 20070705
  - (djm) Clean up generated files in clean: target
  - (djm) Insert copyright year in all notices
@@ -79,4 +82,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.28 2007/07/05 02:00:54 djm Exp $
+$Id: ChangeLog,v 1.29 2007/07/07 00:28:01 djm Exp $

@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_lex.l,v 1.4 2007/07/05 02:00:55 djm Exp $ */
+/* $Id: cfsm_lex.l,v 1.5 2007/07/07 00:28:01 djm Exp $ */
 
 %{
 #include <sys/types.h>
@@ -28,6 +28,7 @@ extern u_int lnum;
 whitespace	[ \t]+
 comment		#.*
 id		[a-zA-Z_][a-zA-Z0-9_]*
+number		([0-9]+)|(0x[0-9a-fA-F]+)
 nl		\n
 comma		,
 fullline	^.*
@@ -77,6 +78,9 @@ transition-function-args		{ return TRANSITION_CALLBACK_ARGS; }
 
 {id}					{ yylval.string = strdup(yytext);
 					  return ID;
+					}
+{number}				{ yylval.string = strdup(yytext);
+					  return NUMBER;
 					}
 {nl}					{ lnum++; }
 .					{ return yytext[0]; }

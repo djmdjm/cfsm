@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_parse.y,v 1.12 2007/07/05 02:00:55 djm Exp $ */
+/* $Id: cfsm_parse.y,v 1.13 2007/07/07 00:28:01 djm Exp $ */
 
 %{
 #include <sys/types.h>
@@ -110,9 +110,9 @@ u_int event_specified = 0;
 %token EVENT_ADVANCE TRANSITION_EXIT_CALLBACK TRANSITION_PRECOND_ARGS
 %token SOURCE_BANNER_START SOURCE_BANNER_END STATE_NTOP_FUNC STATE_ENUM STATE 
 %token TRANSITION_CALLBACK_ARGS
-%token <string> ID BANNER_LINE
+%token <string> ID BANNER_LINE NUMBER
 
-%type <n> callback_arg callback_arglist callback_args
+%type <n> callback_arg callback_arglist callback_args number
 
 %union {
 	char *string;
@@ -153,49 +153,49 @@ banner:			banner_start banner_lines banner_end
 	;
 
 state_enum_def:		STATE_ENUM ID {
-		if (mdict_replace_ss(fsm_namespace, "state_enum", $2) == -1)
+		if (mdict_replace_ss(fsm_namespace, "state_enum", $2) == NULL)
 			errx(1, "state_enum_def: mdict_replace_ss");
 		free($2);
 	}
 	;
 
 event_enum_def:		EVENT_ENUM ID {
-		if (mdict_replace_ss(fsm_namespace, "event_enum", $2) == -1)
+		if (mdict_replace_ss(fsm_namespace, "event_enum", $2) == NULL)
 			errx(1, "event_enum_def: mdict_replace_ss");
 		free($2);
 	}
 	;
 
 fsm_struct_def:		FSM_STRUCT ID {
-		if (mdict_replace_ss(fsm_namespace, "fsm_struct", $2) == -1)
+		if (mdict_replace_ss(fsm_namespace, "fsm_struct", $2) == NULL)
 			errx(1, "fsm_struct_def: mdict_replace_ss");
 	}
 	;
 
 current_state_func_def:	CURRENT_STATE_FUNC ID {
 		if (mdict_replace_ss(fsm_namespace, "current_state_func",
-		    $2) == -1)
+		    $2) == NULL)
 			errx(1, "current_state_func_def: mdict_replace_ss");
 		free($2);
 	}
 	;
 
 init_func_def:		INIT_FUNC ID {
-		if (mdict_replace_ss(fsm_namespace, "init_func", $2) == -1)
+		if (mdict_replace_ss(fsm_namespace, "init_func", $2) == NULL)
 			errx(1, "init_func_def: mdict_replace_ss");
 		free($2);
 	}
 	;
 
 free_func_def:		FREE_FUNC ID {
-		if (mdict_replace_ss(fsm_namespace, "free_func", $2) == -1)
+		if (mdict_replace_ss(fsm_namespace, "free_func", $2) == NULL)
 			errx(1, "free_func_def: mdict_replace_ss");
 		free($2);
 	}
 	;
 
 advance_func_def:	ADVANCE_FUNC ID {
-		if (mdict_replace_ss(fsm_namespace, "advance_func", $2) == -1)
+		if (mdict_replace_ss(fsm_namespace, "advance_func", $2) == NULL)
 			errx(1, "advance_func_def: mdict_replace_ss");
 		free($2);
 	}
@@ -203,7 +203,7 @@ advance_func_def:	ADVANCE_FUNC ID {
 
 state_ntop_func_def:	STATE_NTOP_FUNC ID {
 		if (mdict_replace_ss(fsm_namespace, "state_ntop_func",
-		    $2) == -1)
+		    $2) == NULL)
 			errx(1, "state_ntop_func_def: mdict_replace_ss");
 		free($2);
 	}
@@ -211,7 +211,7 @@ state_ntop_func_def:	STATE_NTOP_FUNC ID {
 
 event_ntop_func_def:	EVENT_NTOP_FUNC ID {
 		if (mdict_replace_ss(fsm_namespace, "event_ntop_func",
-		    $2) == -1)
+		    $2) == NULL)
 			errx(1, "event_ntop_func_def: mdict_replace_ss");
 		free($2);
 	}
@@ -222,7 +222,7 @@ callback_arg:		EVENT		{ $$ = CB_ARG_EVENT; }
 			| OLD_STATE	{ $$ = CB_ARG_OLD_STATE; }
 			| CTX {
 		$$ = CB_ARG_CTX;
-		if (mdict_replace_si(fsm_namespace, "need_ctx", 1) == -1)
+		if (mdict_replace_si(fsm_namespace, "need_ctx", 1) == NULL)
 			errx(1, "ctx: mdict_replace_si failed");
 	}
 	;
@@ -257,25 +257,22 @@ trans_callback_arg_def:	TRANSITION_CALLBACK_ARGS callback_args {
 
 state_decl:		STATE ID {
 		current_event = NULL;
-		if (mdict_insert_sd(fsm_states, $2) == -1) {
+		current_state = mdict_insert_sd(fsm_states, $2);
+		if (current_state == NULL) {
 			yyerror("state \"%s\" already defined", $2);
 			free($2);
 			YYERROR;
-		} else {
-			if ((current_state = mdict_item_s(fsm_states,
-			    $2)) == NULL)
-				errx(1, "state_decl: mdict_item_s failed");
 		}
-		if (mdict_insert_ss(current_state, "name", $2) == -1 ||
-		    mdict_insert_sd(current_state, "events") == -1 ||
-		    mdict_insert_sd(current_state, "next_states") == -1 ||
-		    mdict_insert_sd(current_state, "exit_preconds") == -1 ||
-		    mdict_insert_sd(current_state, "entry_preconds") == -1 ||
-		    mdict_insert_sd(current_state, "exit_callbacks") == -1 ||
-		    mdict_insert_sd(current_state, "entry_callbacks") == -1 ||
-		    mdict_insert_si(current_state, "is_initial", 0) == -1 ||
-		    mdict_insert_si(current_state, "indegree", 0) == -1 ||
-		    marray_append_s(fsm_states_array, $2) == -1)
+		if (mdict_insert_ss(current_state, "name", $2) == NULL ||
+		    mdict_insert_sd(current_state, "events") == NULL ||
+		    mdict_insert_sd(current_state, "next_states") == NULL ||
+		    mdict_insert_sd(current_state, "exit_preconds") == NULL ||
+		    mdict_insert_sd(current_state, "entry_preconds") == NULL ||
+		    mdict_insert_sd(current_state, "exit_callbacks") == NULL ||
+		    mdict_insert_sd(current_state, "entry_callbacks") == NULL ||
+		    mdict_insert_si(current_state, "is_initial", 0) == NULL ||
+		    mdict_insert_si(current_state, "indegree", 0) == NULL ||
+		    marray_append_s(fsm_states_array, $2) == NULL)
 			errx(1, "state_decl: set up state failed");
 		free($2);
 	}
@@ -294,7 +291,7 @@ initial_state_def:	INITIAL_STATE {
 			yyerror("\"initial-state\" already set for this state");
 			YYERROR;
 		}
-		if (mdict_replace_si(current_state, "is_initial", 1) == -1)
+		if (mdict_replace_si(current_state, "is_initial", 1) == NULL)
 			errx(1, "initial_state_def: mdict_replace_si failed");
 		if ((i = mdict_item_s(current_state, "name")) == NULL)
 			errx(1, "initial_state_def: state lacks name");
@@ -323,7 +320,7 @@ next_state_def:		NEXT_STATE ID {
 		if ((next_states = mdict_item_s(current_state,
 		    "next_states")) == NULL)
 			errx(1, "next_state_def: state lacks next_states");
-		if (mdict_replace_si(next_states, $2, 1) == -1)
+		if (mdict_replace_si(next_states, $2, 1) == NULL)
 			errx(1, "next_state_def: mdict_replace_si failed");
 		free($2);
 	}
@@ -345,13 +342,13 @@ on_event_def:		EVENT_ADVANCE ID MOVETO ID {
 		}
 		if ((events = mdict_item_s(current_state, "events")) == NULL)
 			errx(1, "on_event_def: state lacks events");
-		if (mdict_replace_ss(events, $2, $4) == -1)
+		if (mdict_replace_ss(events, $2, $4) == NULL)
 			errx(1, "on_event_def: mdict_replace_ss failed");
 
 		if ((next_states = mdict_item_s(current_state,
 		    "next_states")) == NULL)
 			errx(1, "on_event_def: state lacks next_states");
-		if (mdict_replace_si(next_states, $4, 1) == -1)
+		if (mdict_replace_si(next_states, $4, 1) == NULL)
 			errx(1, "on_event_def: mdict_replace_si failed");
 
 		free($2);
@@ -373,7 +370,7 @@ ignore_event_def:	IGNORE_EVENT ID {
 		}
 		if ((events = mdict_item_s(current_state, "events")) == NULL)
 			errx(1, "on_event_def: state lacks events");
-		if (mdict_replace_sn(events, $2) == -1)
+		if (mdict_replace_sn(events, $2) == NULL)
 			errx(1, "on_event_def: mdict_replace_sn failed");
 		free($2);
 	}
@@ -471,14 +468,33 @@ banner_line:		BANNER_LINE {
 
 banner_end:		BANNER_END {
 		if (mdict_replace_ss(fsm_namespace, "source_banner",
-		    banner) == -1)
+		    banner) == NULL)
 			errx(1, "mdict_replace_ss failed");
 		free(banner);
 		banner = NULL;
 		banner_len = 0;
 	}
 	;
+number:			NUMBER {
+		u_long n;
+		char *ep;
 
+		errno = 0;
+		n = strtoul($1, &ep, 0);
+		if (*$1 == '\0' || *ep != '\0') {
+			yyerror("argument \"%s\" is not a valid number", $1);
+			free($1);
+			YYERROR;
+		}
+		if ((errno == ERANGE && n == ULONG_MAX) || n > 0xffffffff) {
+			yyerror("numeric argument out of range", $1);
+			free($1);
+			YYERROR;
+		}
+		$$ = n;
+		free($1);
+	}
+	;
 %%
 
 void
@@ -571,14 +587,14 @@ get_or_create_event(char *name)
 
 	ret = mdict_item_s(fsm_events, name);
 	if (ret == NULL) {
-		if (mdict_insert_sd(fsm_events, name) == -1)
+		if (mdict_insert_sd(fsm_events, name) == NULL)
 			errx(1, "%s: mdict_item_s failed", __func__);
 		if ((ret = mdict_item_s(fsm_events, name)) == NULL)
 			errx(1, "%s: mdict_item_s failed", __func__);
-		if (mdict_insert_sd(ret, "preconds") == -1 ||
-		    mdict_insert_sd(ret, "callbacks") == -1)
+		if (mdict_insert_sd(ret, "preconds") == NULL ||
+		    mdict_insert_sd(ret, "callbacks") == NULL)
 			errx(1, "%s: set up event failed", __func__);
-		if (marray_append_s(fsm_events_array, name) == -1)
+		if (marray_append_s(fsm_events_array, name) == NULL)
 			errx(1, "%s: marray_append_s failed", __func__);
 	}
 	return ret;
@@ -597,10 +613,10 @@ create_action(char *name, const char *context, const char *block,
 	if ((l = mdict_item_s(parent, member)) == NULL)
 		errx(1, "%s(%s): %s lacks %s", __func__, context,
 		    block, member);
-	if (mdict_replace_si(l, name, 1) != 0)
+	if (mdict_replace_si(l, name, 1) == NULL)
 		errx(1, "%s(%s): mdict_replace_si(%p, %s, 1) failed",
 		    __func__, context, l, name);
-	if (mdict_replace_si(main_list, name, 1) != 0)
+	if (mdict_replace_si(main_list, name, 1) == NULL)
 		errx(1, "%s(%s): mdict_replace_si(%p, %s, 1) failed",
 		    __func__, context, main_list, name);
 	return 0;
@@ -613,15 +629,15 @@ setup_initial_namespace(void)
 	char *guard;
 
 #define DEF_STRING(k, v) do { \
-		if (mdict_insert_ss(fsm_namespace, k, v) != 0) \
+		if (mdict_insert_ss(fsm_namespace, k, v) == NULL) \
 			errx(1, "Default set for \"%s\" failed", k); \
 	} while (0)
 #define DEF_DICT(k) do { \
-		if (mdict_insert_sd(fsm_namespace, k) != 0) \
+		if (mdict_insert_sd(fsm_namespace, k) == NULL) \
 			errx(1, "Default set for \"%s\" failed", k); \
 	} while (0)
 #define DEF_ARRAY(k) do { \
-		if (mdict_insert_sa(fsm_namespace, k) != 0) \
+		if (mdict_insert_sa(fsm_namespace, k) == NULL) \
 			errx(1, "Default set for \"%s\" failed", k); \
 	} while (0)
 #define DEF_GET(o, k) do { \
@@ -677,7 +693,7 @@ setup_initial_namespace(void)
 	DEF_GET(fsm_trans_exit_callbacks, "transition_exit_callbacks");
 	DEF_GET(fsm_trans_exit_preconds, "transition_exit_preconds");
 
-	if (mdict_insert_si(fsm_namespace, "need_ctx", 0) == -1)
+	if (mdict_insert_si(fsm_namespace, "need_ctx", 0) == NULL)
 		errx(1, "Default set for \"need_ctx\" failed");
 
 	if (header_name == NULL) {
@@ -721,20 +737,20 @@ finalise_namespace(void)
 		errx(1, "%s(%d): marray_item", __func__, __LINE__);
 	if ((tmp = mobject_deepcopy(tmp)) == NULL)
 		errx(1, "%s(%d): mobject_deepcopy", __func__, __LINE__);
-	if (mdict_insert_s(fsm_namespace, "min_state_valid", tmp) == -1)
+	if (mdict_insert_s(fsm_namespace, "min_state_valid", tmp) == NULL)
 		errx(1, "%s(%d): mdict_insert_s", __func__, __LINE__);
 	if ((tmp = marray_item(fsm_states_array, n - 1)) == NULL)
 		errx(1, "%s(%d): marray_item", __func__, __LINE__);
 	if ((tmp = mobject_deepcopy(tmp)) == NULL)
 		errx(1, "%s(%d): mobject_deepcopy", __func__, __LINE__);
-	if (mdict_insert_s(fsm_namespace, "max_state_valid", tmp) == -1)
+	if (mdict_insert_s(fsm_namespace, "max_state_valid", tmp) == NULL)
 		errx(1, "%s(%d): mdict_insert_s", __func__, __LINE__);
 
 	/* Set flag for multiple initial states */
 	if ((n = marray_len(fsm_initial_states)) == 0)
 		errx(1, "No initial state defined");
 	if (mdict_insert_si(fsm_namespace, "multiple_start_states",
-	    n > 1 ? 1 : 0) == -1)
+	    n > 1 ? 1 : 0) == NULL)
 		errx(1, "%s(%d): mdict_insert_s", __func__, __LINE__);
 
 	/* If FSM is event-driven, set min and max valid events */
@@ -744,43 +760,45 @@ finalise_namespace(void)
 			errx(1, "%s(%d): marray_item", __func__, __LINE__);
 		if ((tmp = mobject_deepcopy(tmp)) == NULL)
 			errx(1, "%s(%d): mobject_deepcopy", __func__, __LINE__);
-		if (mdict_insert_s(fsm_namespace, "min_event_valid", tmp) == -1)
+		if (mdict_insert_s(fsm_namespace, "min_event_valid",
+		    tmp) == NULL)
 			errx(1, "%s(%d): mdict_insert_s", __func__, __LINE__);
 		if ((tmp = marray_item(fsm_events_array, n - 1)) == NULL)
 			errx(1, "%s(%d): marray_item", __func__, __LINE__);
 		if ((tmp = mobject_deepcopy(tmp)) == NULL)
 			errx(1, "%s(%d): mobject_deepcopy", __func__, __LINE__);
-		if (mdict_insert_s(fsm_namespace, "max_event_valid", tmp) == -1)
+		if (mdict_insert_s(fsm_namespace, "max_event_valid",
+		    tmp) == NULL)
 			errx(1, "%s(%d): mdict_insert_s", __func__, __LINE__);
 	}
 
 	/* Set callback and precondition arguments and prototype signatures */
 	if (mdict_replace_ss(fsm_namespace, "event_precond_args",
-	    gen_cb_args(event_precond_args)) == -1)
+	    gen_cb_args(event_precond_args)) == NULL)
 		errx(1, "%s(%d): mdict_replace_ss", __func__, __LINE__);
 	if (mdict_replace_ss(fsm_namespace, "event_precond_args_proto",
-	    gen_cb_args_proto(event_precond_args)) == -1)
+	    gen_cb_args_proto(event_precond_args)) == NULL)
 		errx(1, "%s(%d): mdict_replace_ss", __func__, __LINE__);
 
 	if (mdict_replace_ss(fsm_namespace, "trans_precond_args",
-	    gen_cb_args(trans_precond_args)) == -1)
+	    gen_cb_args(trans_precond_args)) == NULL)
 		errx(1, "%s(%d): mdict_replace_ss", __func__, __LINE__);
 	if (mdict_replace_ss(fsm_namespace, "trans_precond_args_proto",
-	    gen_cb_args_proto(trans_precond_args)) == -1)
+	    gen_cb_args_proto(trans_precond_args)) == NULL)
 		errx(1, "%s(%d): mdict_replace_ss", __func__, __LINE__);
 
 	if (mdict_replace_ss(fsm_namespace, "event_cb_args",
-	    gen_cb_args(event_callback_args)) == -1)
+	    gen_cb_args(event_callback_args)) == NULL)
 		errx(1, "%s(%d): mdict_replace_ss", __func__, __LINE__);
 	if (mdict_replace_ss(fsm_namespace, "event_cb_args_proto",
-	    gen_cb_args_proto(event_callback_args)) == -1)
+	    gen_cb_args_proto(event_callback_args)) == NULL)
 		errx(1, "%s(%d): mdict_replace_ss", __func__, __LINE__);
 
 	if (mdict_replace_ss(fsm_namespace, "trans_cb_args",
-	    gen_cb_args(trans_callback_args)) == -1)
+	    gen_cb_args(trans_callback_args)) == NULL)
 		errx(1, "%s(%d): mdict_replace_ss", __func__, __LINE__);
 	if (mdict_replace_ss(fsm_namespace, "trans_cb_args_proto",
-	    gen_cb_args_proto(trans_callback_args)) == -1)
+	    gen_cb_args_proto(trans_callback_args)) == NULL)
 		errx(1, "%s(%d): mdict_replace_ss", __func__, __LINE__);
 
 	/*
