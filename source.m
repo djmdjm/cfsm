@@ -12,11 +12,6 @@
 
 #include "{{header_name}}"
 
-/* Private view of opaque FSM structure */
-struct {{fsm_struct}} {
-	enum {{state_enum}} current_state;
-};
-
 {{if transition_entry_callbacks}}/* Prototypes for state transition entry callbacks */
 {{for cb in transition_entry_callbacks}}void {{cb.key}}({{trans_cb_args_proto}});
 {{endfor}}
@@ -62,7 +57,7 @@ const char *
 
 	return r == NULL ? "[INVALID]" : r;
 }
-{{if events}}
+
 static int
 _is_{{event_enum}}_valid(enum {{event_enum}} n)
 {
@@ -90,12 +85,10 @@ const char *
 
 	return r == NULL ? "[INVALID]" : r;
 }
-{{endif}}
-{{if multiple_start_states}}struct {{fsm_struct}} *
-{{init_func}}(enum {{state_enum}} initial_state, char *errbuf, size_t errlen)
-{
-	struct {{fsm_struct}} *ret = NULL;
 
+{{if multiple_start_states}}int
+{{init_func}}(struct {{fsm_struct}} *fsm, enum {{state_enum}} initial_state, char *errbuf, size_t errlen)
+{
 	switch (initial_state) {
 {{for s in initial_states}}	case {{s.value}}:
 {{endfor}}		break;
@@ -106,35 +99,18 @@ const char *
 			    {{state_ntop_func}}_safe(initial_state),
 			    initial_state);
 		}
-		return NULL;
+		return CFSM_ERR_INVALID_STATE;
 	}
-	if ((ret = calloc(1, sizeof(*ret))) == NULL) {
-		if (errlen > 0 && errbuf != NULL)
-			snprintf(errbuf, errlen, "Memory allocation failed");
-		return NULL;
-	}
-	ret->current_state = initial_state;
-	return ret;
-}{{else}}struct {{fsm_struct}} *
-{{init_func}}(char *errbuf, size_t errlen)
+	bzero(fsm, sizeof(fsm));
+	fsm->current_state = initial_state;
+	return CFSM_OK;
+}{{else}}int
+{{init_func}}(struct {{fsm_struct}} *fsm, char *errbuf, size_t errlen)
 {
-	struct {{fsm_struct}} *ret = NULL;
-
-	if ((ret = calloc(1, sizeof(*ret))) == NULL) {
-		if (errlen > 0 && errbuf != NULL)
-			snprintf(errbuf, errlen, "Memory allocation failed");
-		return NULL;
-	}
-	ret->current_state = {{initial_states[0]}};
-	return ret;
+	bzero(fsm, sizeof(fsm));
+	fsm->current_state = {{initial_states[0]}};
+	return CFSM_OK;
 }{{endif}}
-
-void
-{{free_func}}(struct {{fsm_struct}} *fsm)
-{
-	memset(fsm, '\0', sizeof(fsm));
-	free(fsm);
-}
 
 enum {{state_enum}}
 {{current_state_func}}(struct {{fsm_struct}} *fsm)
@@ -142,14 +118,12 @@ enum {{state_enum}}
 	return fsm->current_state;
 }
 
-{{if events}}int {{advance_func}}(struct {{fsm_struct}} *fsm, enum {{event_enum}} ev,
+int {{advance_func}}(struct {{fsm_struct}} *fsm, enum {{event_enum}} ev,
     {{if need_ctx}}void *ctx, {{endif}}char *errbuf, size_t errlen)
-{{else}}int {{advance_func}}(struct {{fsm_struct}} *fsm, enum {{state_enum}} new_state,
-    {{if need_ctx}}void *ctx, {{endif}}char *errbuf, size_t errlen)
-{{endif}}{
+{
 	enum {{state_enum}} old_state = fsm->current_state;
-{{if events}}	enum {{state_enum}} new_state;
-{{endif}}
+	enum {{state_enum}} new_state;
+
 	/* Sanity check states */
 	if (_is_{{state_enum}}_valid(fsm->current_state) != 0) {
 		if (errlen > 0 && errbuf != NULL) {
@@ -158,20 +132,13 @@ enum {{state_enum}}
 		}
 		return CFSM_ERR_INVALID_STATE;
 	}
-{{if events}}	if (_is_{{event_enum}}_valid(ev) != 0) {
+	if (_is_{{event_enum}}_valid(ev) != 0) {
 		if (errlen > 0 && errbuf != NULL)
 			snprintf(errbuf, errlen, "Invalid event (%d)", ev);
 		return CFSM_ERR_INVALID_EVENT;
 	}
-{{else}}	if (_is_{{state_enum}}_valid(new_state) != 0) {
-		if (errlen > 0 && errbuf != NULL) {
-			snprintf(errbuf, errlen, "Invalid new_state (%d)",
-			    new_state);
-		}
-		return CFSM_ERR_INVALID_STATE;
-	}{{endif}}
 
-{{if events}}	/* Event validity checks */
+	/* Event validity checks */
 	switch(old_state) {
 {{for state in states}}	case {{state.key}}:
 {{if state.value.events}}		switch (ev) {
@@ -183,18 +150,7 @@ enum {{state_enum}}
 		}
 		break;
 {{else}}		goto bad_event;
-{{endif}}{{endfor}}	}{{else}}	/* Transition checks */
-	switch(old_state) {
-{{for state in states}}	case {{state.key}}:
-{{if state.value.next_states}}		switch (new_state) {
-{{for next_state in state.value.next_states}}		case {{next_state.key}}:
-{{endfor}}			break;
-		default:
-			goto bad_transition;
-		}
-		break;
-{{else}}		goto bad_transition;
-{{endif}}{{endfor}}	}{{endif}}
+{{endif}}{{endfor}}	}
 {{if event_preconds}}
 	/* Event preconditions */
 	switch(ev) {
@@ -281,7 +237,7 @@ enum {{state_enum}}
 		    {{event_ntop_func}}_safe(ev));
 	}
 	return CFSM_ERR_PRECONDITION;
-{{endif}}{{if events}}
+{{endif}}
  bad_event:
 	if (errlen > 0 && errbuf != NULL) {
 		snprintf(errbuf, errlen,
@@ -290,13 +246,4 @@ enum {{state_enum}}
 		    {{state_ntop_func}}_safe(fsm->current_state));
 	}
 	return CFSM_ERR_INVALID_TRANSITION;
-{{else}}
- bad_transition:
-	if (errlen > 0 && errbuf != NULL) {
-		snprintf(errbuf, errlen,
-		    "Illegal state transition attempted: %s -> %s",
-		    {{state_ntop_func}}_safe(fsm->current_state),
-		    {{state_ntop_func}}_safe(new_state));
-	}
-	return CFSM_ERR_INVALID_TRANSITION;
-{{endif}}}
+}

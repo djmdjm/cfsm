@@ -1,21 +1,21 @@
 # This file is in the public domain
 # Damien Miller 2007-02-08
 
-# $Id: t2_fsm.fsm,v 1.3 2007/03/26 03:22:24 djm Exp $
+# $Id: t2_fsm.fsm,v 1.4 2007/11/18 09:51:19 djm Exp $
 
 precondition-function-args none
 transition-function-args old-state,ctx
 
 state T1a
 	initial-state
-	next-state T2
+	on-event T1_DONE -> T2
 state T1b
 	initial-state
-	next-state T2
+	on-event T1_DONE -> T2
 state T2
-	next-state T3
+	on-event T2_DONE -> T3
 state T3
-	next-state T2
-	next-state T4
+	on-event T3_DONE1 -> T2
+	on-event T3_DONE2 -> T4
 state T4
 

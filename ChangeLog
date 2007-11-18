@@ -1,3 +1,9 @@
+20071118
+ - (djm) Remove support for non-event-based FSMs
+ - (djm) Make FSM struct public, so no need for ugly allocation/deallocation
+   dance
+ - (djm) Rework regress tests to be event-based
+
 20070707
  - (djm) Adapt to mtemplate API change
 
@@ -82,4 +88,4 @@
 20070207
  - (djm) Initial import of cfsm
 
-$Id: ChangeLog,v 1.29 2007/07/07 00:28:01 djm Exp $
+$Id: ChangeLog,v 1.30 2007/11/18 09:51:19 djm Exp $

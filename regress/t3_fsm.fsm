@@ -1,35 +1,35 @@
 # This file is in the public domain
 # Damien Miller 2007-02-08
 
-# $Id: t3_fsm.fsm,v 1.3 2007/03/26 03:22:24 djm Exp $
+# $Id: t3_fsm.fsm,v 1.4 2007/11/18 09:51:19 djm Exp $
 
 precondition-function-args old-state,new-state,ctx
 transition-function-args old-state,new-state,ctx
 
 state T1a
 	initial-state
-	next-state T2
+	on-event T1_DONE -> T2
 	entry-precondition t1a_entry_pre
 	exit-precondition t1a_exit_pre
 	onexit-func t1a_exit
 	onentry-func t1a_enter
 state T1b
 	initial-state
-	next-state T2
+	on-event T1_DONE -> T2
 	entry-precondition t1b_entry_pre
 	exit-precondition t1b_exit_pre
 	onexit-func t1b_exit
 	onentry-func t1b_enter
 state T2
-	next-state T3
+	on-event T2_DONE -> T3
 	entry-precondition t2_entry_pre
 	exit-precondition t2_exit_pre
 	onexit-func t2_exit
 	onentry-func t2_enter
 state T3
-	next-state T3
-	next-state T2
-	next-state T4
+	on-event T3_DONE1 -> T2
+	on-event T3_DONE2 -> T3
+	on-event T3_DONE3 -> T4
 	entry-precondition t3_entry_pre
 	exit-precondition t3_exit_pre
 	onexit-func t3_exit

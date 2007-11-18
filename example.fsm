@@ -1,7 +1,7 @@
-# Example state machine
+# Example event-driven state machine
 # Public domain - Damien Miller <djm@mindrot.org> 2007-03-26
 
-# $Id: example.fsm,v 1.7 2007/03/26 03:22:23 djm Exp $
+# $Id: example.fsm,v 1.8 2007/11/18 09:51:19 djm Exp $
 
 # -------------------------------------------------------------------
 # Comments are delimited with a '#' character and may start anywhere
@@ -9,6 +9,7 @@
 
 # Define the enumeration and opaque struct types the state machine will use
 state-enum-type mystate
+event-enum-type myevent
 fsm-struct-type myfsm
 
 # Define the names of the exported API functions
@@ -16,60 +17,80 @@ current-state-function myfsm_current
 initialise-function myfsm_init
 free-function myfsm_free
 advance-function myfsm_advance
-state-enum-to-string-function myfsm_tostring
+state-enum-to-string-function myfsm_state_ntop
+event-enum-to-string-function myfsm_event_ntop
 
 # Specify what arguments we want to pass to the transition preconditions
 # and callbacks
-precondition-function-args old-state,ctx
-transition-function-args none
+precondition-function-args event,new-state,ctx
+transition-function-args event,old-state
+event-callback-args event,ctx
+event-precondition-args event,old-state,new-state,ctx
 
-# Define a state
-state INITIAL_1
-	# Mark this as an "initial" state. FSMs compiled by cfsm require
-	# at least one initial state
+# Define some states and events that trigger transitions between them
+state STATE_A
 	initial-state
-	# Define one or more states that can be advanced to from this state
-	next-state EXCITED_STATE
+	on-event A_DONE -> STATE_B
+	ignore-event C_DONE1
+	ignore-event C_DONE2
+	entry-precondition a_ready
+	exit-precondition a_finished
+	onentry-func a_enter
+	onexit-func a_leave
+state STATE_B
+	on-event B_DONE1 -> STATE_C1
+	on-event B_DONE2 -> STATE_C2
+	ignore-event X_DONE
+	entry-precondition b_ready
+	exit-precondition b_finished
+	onentry-func b_enter
+	onexit-func b_leave
+state STATE_C1
+	on-event C_DONE1 -> STATE_D1
+	on-event C_DONE2 -> STATE_D2
+state STATE_C2
+	on-event C_DONE1 -> STATE_D3
+	on-event C_DONE2 -> STATE_D4
+state STATE_D1
+	on-event D_DONE1 -> STATE_E1
+	on-event D_DONE2 -> STATE_E2
+	on-event D_DONE3 -> STATE_E3
+state STATE_D2
+	on-event D_DONE1 -> STATE_E1
+	on-event D_DONE2 -> STATE_E2
+	on-event D_DONE3 -> STATE_E3
+state STATE_D3
+	on-event D_DONE1 -> STATE_E1
+	on-event D_DONE2 -> STATE_E2
+	on-event D_DONE3 -> STATE_E3
+state STATE_D4
+	on-event D_DONE1 -> STATE_E1
+	on-event D_DONE2 -> STATE_E2
+	on-event D_DONE3 -> STATE_E3
+state STATE_E1
+	on-event E_DONE -> STATE_F
+state STATE_E2
+	on-event E_DONE -> STATE_F
+state STATE_E3
+	on-event E_DONE -> STATE_F
+state STATE_F
+	on-event F_DONE1 -> STATE_G
+	on-event F_DONE2 -> STATE_B
+state STATE_G
+	on-event G_DONE1 -> STATE_A
+	on-event G_DONE2 -> STATE_F
 
-state INITIAL_2
-	# Make this an initial state too. If there are multiple initial states
-	# defined, cfsm will emit a "initialise-function" that must be called
-	# to explicitly initialise the FSM. If only one initial state is
-	# defined, then cfsm will just use it (no initialisation required)
-	initial-state
-	next-state EXCITED_STATE
-	# Define an exit precondition. This will call a function:
-	#    int is_excited(enum mystate current_state, enum mystate new_state)
-	# and will refuse to advance to another state unless it signals
-	# satisfaction by returning zero
-	exit-precondition is_excited
+# Fill in some more details for the events, e.g. callbacks
+# This section is optional; events without extra annotations
+# are still created, but won't have callbacks or preconditions
+# attached.
+event G_DONE1
+	event-callback g_done1_callback
+event F_DONE1
+	event-callback f_done1_callback
+	event-precondition f_done1_precondition
+event A_DONE
+	event-precondition a_done_precondition
 
-state EXCITED_STATE
-	# Define an entry transition function. This will have a signature of:
-	#    void now_excited(enum mystate old_state, enum mystate new_state)
-	# It will be called every time this state is entered
-	onentry-func now_excited
-	# It is possible to have define "loopback" transitions. These will
-	# still need to obey all preconditions and will trigger transition
-	# functions
-	next-state EXCITED_STATE
-	next-state GROUND_STATE
-
-state GROUND_STATE
-	# Define an entry precondition. These have the same signature as the
-	# exit-precondition above
-	entry-precondition ready_to_emit_photon
-	next-state EXCITED_STATE
-	# Define an exit transition function. Same signature as onentry-func
-	onexit-func absorb_a_photon
-
-# Add a banner to our output
-source-banner
-/*
- * This banner gets copied to both the source and header files.
- * It is useful for copyright notices, etc. It continues until the 
- * end-source-banner directive appears at the start of a line
- */
-end-source-banner
 # -------------------------------------------------------------------
 

@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-/* $Id: cfsm_parse.y,v 1.13 2007/07/07 00:28:01 djm Exp $ */
+/* $Id: cfsm_parse.y,v 1.14 2007/11/18 09:51:19 djm Exp $ */
 
 %{
 #include <sys/types.h>
@@ -90,7 +90,6 @@ u_int event_callback_args = 0;
 u_int trans_precond_args = 0;
 u_int event_precond_args = 0;
 
-u_int next_state_specified = 0;
 u_int event_specified = 0;
 
 #define CB_ARG_CTX		(1)
@@ -141,7 +140,7 @@ func_arg_def:		event_precond_arg_def | trans_precond_arg_def |
 	;
 
 state_def:		state_decl | initial_state_def | on_event_def |
-			ignore_event_def | next_state_def |
+			ignore_event_def  |
 			entry_callback_def | exit_callback_def |
 			entry_precond_def | exit_precond_def
 	;
@@ -299,30 +298,6 @@ initial_state_def:	INITIAL_STATE {
 			errx(1, "initial_state_def: mobject_deepcopy");
 		if (marray_append(fsm_initial_states, i) == -1)
 			errx(1, "initial_state_def: marray_append");
-	}
-	;
-
-next_state_def:		NEXT_STATE ID {
-		struct mobject *next_states;
-
-		if (current_state == NULL) {
-			yyerror("\"next-state\" outside state block");
-			free($2);
-			YYERROR;
-		}
-		if (event_specified) {
-			yyerror("Cannot mix events with explicit "
-			    "state transitions");
-			free($2);
-			YYERROR;
-		}
-		next_state_specified = 1;
-		if ((next_states = mdict_item_s(current_state,
-		    "next_states")) == NULL)
-			errx(1, "next_state_def: state lacks next_states");
-		if (mdict_replace_si(next_states, $2, 1) == NULL)
-			errx(1, "next_state_def: mdict_replace_si failed");
-		free($2);
 	}
 	;
 
@@ -579,10 +554,6 @@ get_or_create_event(char *name)
 {
 	struct mobject *ret;
 
-	if (next_state_specified) {
-		yyerror("Cannot mix events with explicit state transitions");
-		return NULL;
-	}
 	event_specified = 1;
 
 	ret = mdict_item_s(fsm_events, name);
@@ -731,6 +702,9 @@ finalise_namespace(void)
 		errx(1, "No states defined");
 	if (n == 1)
 		errx(1, "Only one state defined");
+
+	if (!event_specified)
+		errx(1, "No events specified");
 
 	/* Set min and max valid states */
 	if ((tmp = marray_item(fsm_states_array, 0)) == NULL)

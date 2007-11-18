@@ -1,10 +1,10 @@
 # Public domain - Damien Miller <djm@mindrot.org> 2007-03-26
 
-# $Id: Makefile,v 1.11 2007/04/16 11:55:56 djm Exp $
+# $Id: Makefile,v 1.12 2007/11/18 09:51:19 djm Exp $
 
 CFSM=../cfsm 
 CFSM_FLAGS=-t.. -d
-TARGETS=t1 t2 t3 t_ex0 t_ex1 
+TARGETS=t1 t2 t3 t_ex0
 
 CFLAGS=-Wall
 
@@ -23,12 +23,6 @@ t_ex0_fsm.c: ../example.fsm
 
 t_ex0: t_ex0_fsm.c t_ex0_fsm.o t_ex0.o
 	$(CC) -o $@ t_ex0.o t_ex0_fsm.o
-
-t_ex1_fsm.c: ../example2.fsm
-	$(CFSM) $(CFSM_FLAGS) -o t_ex1_fsm.c ../example2.fsm
-
-t_ex1: t_ex1_fsm.c t_ex1_fsm.o t_ex1.o
-	$(CC) -o $@ t_ex1.o t_ex1_fsm.o
 
 t1_fsm.c: t1_fsm.fsm
 	$(CFSM) $(CFSM_FLAGS) -o t1_fsm.c t1_fsm.fsm
