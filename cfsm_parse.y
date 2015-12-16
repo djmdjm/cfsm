@@ -26,6 +26,7 @@
 #include <stdarg.h>
 #include <ctype.h>
 #include <err.h>
+#include <errno.h>
 
 #include "mobject.h"
 #include "strlcat.h"

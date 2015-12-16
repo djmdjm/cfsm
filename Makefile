@@ -31,7 +31,7 @@ COMPAT_OBJS=strlcat.o strlcpy.o
 
 all: cfsm
 
-cfsm: $(CFSM_OBJS) $(COMPAT_OBJS)
+cfsm: mtemplate/libmtemplate.a $(CFSM_OBJS) $(COMPAT_OBJS)
 	$(CC) -o $@ $(CFSM_OBJS) $(COMPAT_OBJS) $(LDFLAGS) $(LIBS)
 
 cfsm_lex.o: cfsm_parse.h
@@ -42,10 +42,20 @@ cfsm_lex.c: cfsm_lex.l
 cfsm_parse.c: cfsm_parse.y
 	$(YACC) -d -o$@ cfsm_parse.y
 
+mtemplate/libmtemplate.a:
+	@if ! test -f mtemplate/Makefile ; then \
+		echo "mtemplate/Makefile missing. Did you forget to run " \
+		    "'git submodule init'?"; \
+		exit 1; \
+	fi
+	${MAKE} -C mtemplate
+
 clean:
 	rm -f *.o cfsm cfsm_lex.[ch] cfsm_parse.[ch]
 	rm -f lex.yy.[ch] y.tab.[ch] core *.core fsm.c fsm.h fsm.dot
-	cd regress && make clean
+	${MAKE} -C regress clean
+	${MAKE} -C mtemplate clean
 
 test: all
-	cd regress && make
+	${MAKE} -C mtemplate test
+	${MAKE} -C regress

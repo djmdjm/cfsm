@@ -1,0 +1,3 @@
+[submodule "mtemplate"]
+	path = mtemplate
+	url = git@github.com:djmdjm/mtemplate.git
