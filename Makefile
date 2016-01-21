@@ -18,8 +18,8 @@ CFLAGS+=    -g -std=gnu99 -D_GNU_SOURCE
 CFLAGS+=    -I.
 CFLAGS+=    -DTEMPLATE_DIR=\"$(TEMPLATEDIR)\"
 
-LDFLAGS+= -L../mtemplate
-CFLAGS+= -I../mtemplate -DYYDEBUG=1
+LDFLAGS+= -Lmtemplate
+CFLAGS+= -Imtemplate -DYYDEBUG=1
 LIBS+= -lmtemplate -ly -ll
 
 RANLIB=ranlib
