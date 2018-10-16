@@ -14,7 +14,8 @@ the currently supported directives are included as "example.fsm" in
 this directory. The following command line will compile one to generate
 a C source and header as well as a graph in "dot" format:
 
-./cfsm.py -C example.c -H example.h -D example.dot example.fsm
+./cfsm -t . -d example.fsm # Generate fsm.[ch]
+./cfsm -t . -g example.fsm # Generate fsm.dot
 
 The FSM is very self-contained; a handful of functions, an opaque
 struct and one or two enums (you get to pick their names). They are
