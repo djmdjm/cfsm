@@ -101,13 +101,13 @@ const char *
 		}
 		return CFSM_ERR_INVALID_STATE;
 	}
-	bzero(fsm, sizeof(fsm));
+	bzero(fsm, sizeof(*fsm));
 	fsm->current_state = initial_state;
 	return CFSM_OK;
 }{{else}}int
 {{init_func}}(struct {{fsm_struct}} *fsm, char *errbuf, size_t errlen)
 {
-	bzero(fsm, sizeof(fsm));
+	bzero(fsm, sizeof(*fsm));
 	fsm->current_state = {{initial_states[0]}};
 	return CFSM_OK;
 }{{endif}}
