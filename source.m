@@ -177,7 +177,7 @@ int {{advance_func}}(struct {{fsm_struct}} *fsm, enum {{event_enum}} ev,
 {{for state in states}}{{if state.value.entry_preconds}}	case {{state.key}}:
 {{for precond in state.value.entry_preconds}}		if ({{precond.key}}({{trans_precond_args}}) != 0)
 			goto entry_precond_fail;
-{{endfor}}			break;
+{{endfor}}		break;
 {{endif}}{{endfor}}	default:
 		break;
 	}
